@@ -135,6 +135,13 @@ const Map<String, int> cntDurMs = {
   'baby': 4400,
 };
 
+/// 묶음 안에서 숫자 '5' 가 시작하는 위치 = 0ms.
+/// 숫자 간격은 정확히 1초, 마지막 숫자 '1' 은 4000ms 에서 시작한다.
+const int countStepMs = 1000;
+
+/// 마지막 숫자 '1' 의 시작 위치(ms)
+const int countBundleLastMs = 4 * countStepMs;
+
 // ===========================================================================
 // 구간 → 안내 계획
 // ===========================================================================
@@ -556,12 +563,30 @@ class AudioCoach {
   /// 파일 안에서 숫자 사이 간격이 정확히 1초이므로 흔들리지 않는다.
   /// **안내 채널은 건드리지 않는다** (진행 중인 안내를 끊지 않기 위해).
   void playCountBundle({required int fromNumber}) {
-    if (!_anySound || !voiceEnabled) return;
     final n = fromNumber.clamp(1, 5);
-    final offset = (5 - n) * 1000;
+    playCountBundleAt((5 - n) * 1000);
+  }
+
+  /// 묶음 파일을 **타임라인 위치(ms)** 에서 재생한다.
+  ///
+  /// 묶음 타임라인: 숫자 5 = 0ms, 4 = 1000ms, 3 = 2000ms, 2 = 3000ms,
+  /// 1 = 4000ms. 파일 전체는 4400~4449ms.
+  ///
+  /// 왜 '번호' 가 아니라 '위치' 인가
+  /// -----------------------------
+  /// 앱 복귀(catchUp)나 일시정지 재개에서 카운트다운 도중에 다시 재생을
+  /// 걸어야 할 때, 번호 단위로 시작하면 **이미 울린 숫자와 새로 시작한
+  /// 숫자가 겹친다.** (실기기 버그: "5·4·3·2·1 이 중복돼서 말하거나
+  /// 안 들리다가 들린다")
+  ///
+  /// 위치(ms)를 직접 주면 묶음 타임라인 위의 정확한 지점으로 이동하므로
+  /// 몇 번을 다시 걸어도 겹치지 않고 벽시계와 어긋나지 않는다.
+  void playCountBundleAt(int positionMs) {
+    if (!_anySound || !voiceEnabled) return;
+    final pos = positionMs.clamp(0, countBundleLastMs);
     final asset = 'audio/cnt_${voiceStyle.assetKey}.wav';
-    _count.play(asset, startAtMs: offset, volume: voiceVolume);
-    _log(asset, 'count@$n');
+    _count.play(asset, startAtMs: pos, volume: voiceVolume);
+    _log(asset, 'count@pos$pos');
   }
 
   /// 단일 숫자 재생 (음성 꺼짐 → 틱 / 복귀 경로).

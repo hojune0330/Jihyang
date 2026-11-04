@@ -89,6 +89,19 @@ class TabataEngine extends ChangeNotifier {
   /// 이 구간에서 이미 안내한 카운트다운 숫자
   final Set<int> _announced = <int>{};
 
+  /// 이 구간에서 카운트다운 묶음 재생을 이미 시작했는지.
+  ///
+  /// [catchUp]·[resume] 으로 [_scheduleEvents] 가 다시 돌 때 묶음을 **또**
+  /// 재생하면 이미 울린 숫자와 겹친다. (실기기 버그: "중복돼서 말하거나
+  /// 안 들리다가 들린다") 그래서 구간당 정확히 한 번만 시작한다.
+  bool _countStarted = false;
+
+  /// 묶음을 시작한 시점의 벽시계 — 재생이 끝났는지 판단하는 기준.
+  DateTime? _countStartedWall;
+
+  /// 묶음에서 재생을 시작한 타임라인 위치(ms). 5→0, 4→1000, 3→2000 …
+  int _countStartPosMs = 0;
+
   /// 현재 구간에 울릴 안내 계획 (효과음 + 상태 음성).
 
   /// 구간 시작 안내(효과음+음성)가 끝날 때까지의 시간(ms).
@@ -235,6 +248,9 @@ class TabataEngine extends ChangeNotifier {
     _pausedElapsedMs = 0;
     _accumulatedMs = 0;
     _announced.clear();
+    _countStarted = false;
+    _countStartedWall = null;
+    _countStartPosMs = 0;
     _completedRounds = 0;
     _completedSets = 0;
   }
@@ -275,6 +291,9 @@ class TabataEngine extends ChangeNotifier {
     _accumulatedMs = 0;
     _pausedElapsedMs = 0;
     _announced.clear();
+    _countStarted = false;
+    _countStartedWall = null;
+    _countStartPosMs = 0;
     _completedRounds = 0;
     _completedSets = 0;
     _sessionStartedAt = DateTime.now();
@@ -296,6 +315,11 @@ class TabataEngine extends ChangeNotifier {
     _cancelEventTimers();
     // 재생 중이던 카운트다운/안내 음성을 **동기적으로** 무효화한다.
     AudioCoach.instance.cut();
+    // 묶음도 끊겼으므로 '재생 중' 표시를 내린다. [_announced] 는 그대로 두어
+    // 재개했을 때 이미 울린 숫자를 다시 읽지 않게 한다.
+    // → 재개 시에는 **남은 다음 숫자 위치**부터 깔끔하게 이어진다.
+    _countStarted = false;
+    _countStartedWall = null;
 
     notifyListeners();
   }
@@ -435,41 +459,36 @@ class TabataEngine extends ChangeNotifier {
     //
     // 음성 안내를 껐을 때는 묶음 대신 매초 '틱'(sfx_count)을 그대로 쓴다.
     if (cur.hasCountdown) {
-      // 가장 **먼저** 울릴 숫자를 찾는다.
+      // 숫자 n 은 "구간 종료 n초 전" = `durationMs - n*1000` 지점에 울린다.
+      // (n=5 → 0ms 위치 / n=1 → 4000ms 위치)
       //
-      // 5 → 1 순으로 훑어 **처음** 조건을 만족하는 숫자에서 멈춘다.
-      // (n 이 클수록 구간 앞쪽이므로, 먼저 만족하는 n 이 곧 가장 앞 숫자다)
+      // ## 왜 '번호' 가 아니라 '벽시계 위치' 로 재생하는가
       //
-      // [실기기 버그] 예전 코드는 `firstPlayable = n` 을 break 없이 대입해서
-      // 루프가 끝나면 항상 마지막 값인 1 이 남았다. 그러면 묶음 파일을
-      // 4초 지점(='하나')부터 재생해 **'1'만 들리고 5·4·3·2 는 무음**이 된다.
-      // (호준님 보고: "5·4·3·2·1 은 소리가 아예 들리지 않아 마지막 1만 들려")
-      // 반드시 첫 매치에서 break 해 '가장 큰' 숫자를 골라야 한다.
-      int? firstPlayable;
+      // 묶음 파일은 5·4·3·2·1 이 1초 간격으로 이어진 **하나의 타임라인**이다.
+      // 예전에는 "가장 먼저 울릴 숫자" 를 골라 그 번호 지점부터 재생했다.
+      // 그러면 [catchUp]·[resume] 으로 스케줄이 다시 걸릴 때마다 그 순간의
+      // '남은 숫자' 를 새 시작점으로 잡아 **이미 울린 숫자와 겹쳤다.**
+      // (실기기 보고: "5·4·3·2·1 이 싱크가 안 맞고 중복돼서 말하거나
+      //  안 들리다가 들린다")
+      //
+      // 지금은 묶음을 구간당 **한 번만** 시작하고, 재생 위치는 항상
+      // '구간 시작으로부터 흐른 시간' 에서 계산한다. 몇 번을 다시 걸어도
+      // 타임라인 위의 같은 지점을 가리키므로 겹침도 어긋남도 생기지 않는다.
       for (var n = 5; n >= 1; n--) {
-        final atMs = durationMs - n * 1000;
-        final delayMs = atMs - elapsed;
-        if (atMs < _announceGuardMs) continue;
-        if (delayMs < -250) continue;
-        firstPlayable = n; // ← 5,4,3... 순으로 내려오므로 첫 매치가 가장 앞 숫자
-        break;
-      }
-
-      for (var n = 5; n >= 1; n--) {
+        // 이미 울린 숫자는 다시 예약하지 않는다.
+        // (없으면 재개 때 같은 숫자에 타이머가 또 걸려 로그·발화가 중복된다)
         if (_announced.contains(n)) continue;
-        final atMs = durationMs - n * 1000;
+        final atMs = durationMs - n * countStepMs;
         final delayMs = atMs - elapsed;
-
         if (atMs < _announceGuardMs) {
-          _announced.add(n);
+          _announced.add(n); // 시작 안내와 겹치는 앞쪽 숫자는 생략
           continue;
         }
-        if (delayMs < -250) {
-          _announced.add(n);
+        if (delayMs < -countStepMs) {
+          _announced.add(n); // 이미 한참 지난 숫자
           continue;
         }
-        // 묶음 재생에서는 가장 앞 숫자만 실제 재생을 시작한다.
-        final startsBundle = (n == firstPlayable);
+
         _scheduleAt(
           start.add(Duration(milliseconds: atMs)),
           delayMs < 0 ? 0 : delayMs,
@@ -481,13 +500,46 @@ class TabataEngine extends ChangeNotifier {
             if (_announced.contains(n)) return;
             _announced.add(n);
             if (!audioOutputEnabled) return;
+
             if (!AudioCoach.instance.voiceEnabled) {
               // 음성 꺼짐 → 매초 또렷한 틱
               AudioCoach.instance.playSfx(Sfx.count);
-            } else if (startsBundle) {
-              // 묶음 파일 1회 재생 (이후 숫자는 파일 안에서 이어짐)
-              AudioCoach.instance.playCountBundle(fromNumber: n);
+              return;
             }
+
+            // 묶음 타임라인 위에서 이 숫자의 위치.
+            //   5 → 0ms, 4 → 1000ms, 3 → 2000ms, 2 → 3000ms, 1 → 4000ms
+            final targetPos = (5 - n) * countStepMs;
+            final now = DateTime.now();
+
+            // ① 아직 시작 전 → 이 위치에서 시작
+            if (!_countStarted) {
+              _countStarted = true;
+              _countStartedWall = now;
+              _countStartPosMs = targetPos;
+              AudioCoach.instance.playCountBundleAt(targetPos);
+              return;
+            }
+
+            // ② 이미 재생 중 → **절대 다시 걸지 않는다.**
+            //
+            // 다시 걸면 이미 울린 숫자와 겹쳐 "중복돼서 말하는" 현상이 된다.
+            // (실기기 보고의 직접 원인)
+            //
+            // 다만 백그라운드에서 재생이 이미 끝나 버렸다면(플레이어 타임아웃
+            // 등) 그대로 두면 숫자가 통째로 사라지므로, 그 경우에만 이
+            // 숫자부터 새로 시작한다.
+            final startedAt = _countStartedWall;
+            if (startedAt == null) return;
+            final played = now.difference(startedAt).inMilliseconds;
+            final remainOfBundle =
+                (cntDurMs[_config.voiceStyle.assetKey] ?? 4400) - _countStartPosMs;
+            if (played > remainOfBundle + 200) {
+              _countStartedWall = now;
+              _countStartPosMs = targetPos;
+              AudioCoach.instance.playCountBundleAt(targetPos);
+            }
+            // 그 외에는 아무것도 하지 않는다 (재생 중인 묶음이 계속 이어진다)
           },
         );
       }
@@ -590,6 +642,9 @@ class TabataEngine extends ChangeNotifier {
 
     _index = _index + 1;
     _announced.clear();
+    _countStarted = false;
+    _countStartedWall = null;
+    _countStartPosMs = 0;
     _cancelEventTimers();
 
     if (_index >= _phases.length) {
@@ -645,6 +700,9 @@ class TabataEngine extends ChangeNotifier {
 
   /// (검증용) 현재 구간의 카운트다운 보호 구간(ms)
   int get announceGuard => _announceGuardMs;
+
+  /// (검증용) 이 구간에서 이미 울린 카운트다운 숫자 개수
+  int get announcedCount => _announced.length;
 
   /// (검증용) 현재 구간의 안내 시각표
   AnnounceTiming get lastAnnounceTiming => announceTiming(
