@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'models/tabata_config.dart';
+import 'models/workout_record.dart';
 import 'screens/finished_screen.dart';
+import 'screens/history_screen.dart';
 import 'screens/ready_screen.dart';
 import 'screens/running_screen.dart';
 import 'screens/settings_screen.dart';
@@ -13,6 +15,7 @@ import 'services/config_store.dart';
 import 'services/notification_service.dart';
 import 'services/session_store.dart';
 import 'services/tabata_engine.dart';
+import 'services/workout_store.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -49,7 +52,7 @@ class TabataApp extends StatelessWidget {
   }
 }
 
-/// 스크린샷 검증용 래퍼 (--dart-define=SHOT=settings 일 때 설정 화면을 바로 렌더)
+/// 스크린샷 검증용 래퍼 (--dart-define=SHOT=settings|finished|history)
 class _ShotWrapper extends StatelessWidget {
   const _ShotWrapper({required this.child});
 
@@ -57,7 +60,6 @@ class _ShotWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 디버그 빌드에서만 동작하는 화면 검증용 바로가기
     if (kDebugMode) {
       const shot = String.fromEnvironment('SHOT');
       if (shot == 'settings') {
@@ -73,6 +75,9 @@ class _ShotWrapper extends StatelessWidget {
           onRestart: () {},
           onHome: () {},
         );
+      }
+      if (shot == 'history') {
+        return const HistoryScreen();
       }
     }
     return child;
@@ -94,9 +99,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   bool _loaded = false;
   AppScreen _screen = AppScreen.ready;
   bool _hasSavedSession = false;
+  int _todayCount = 0;
 
   DateTime _lastSnapshot = DateTime.fromMillisecondsSinceEpoch(0);
   bool _wakelockOn = false;
+
+  /// 이번 세션 기록이 이미 저장되었는지 (중복 저장 방지)
+  bool _recordSaved = false;
 
   @override
   void initState() {
@@ -118,15 +127,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         setRestSeconds: 4,
         soundEnabled: true,
         voiceEnabled: true,
-        sfxEnabled: false,
+        sfxEnabled: true,
       );
     }
     final session = await SessionStore.load();
+    final records = await WorkoutStore.load(force: true);
     if (!mounted) return;
 
     setState(() {
       _config = cfg;
       _loaded = true;
+      _todayCount = WorkoutStore.today(records).length;
     });
     _engine.updateConfig(cfg);
 
@@ -139,6 +150,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         _config = restoredConfig;
         _hasSavedSession = restored;
       });
+      if (restored) _recordSaved = false;
     }
 
     // 화면 검증용 자동 시작 (빌드 시 --dart-define=AUTOSTART=true)
@@ -166,10 +178,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
     _syncSideEffects(status);
     _persistSession();
+    if (status == EngineStatus.finished) _saveRecordIfNeeded();
   }
 
   void _syncSideEffects(EngineStatus status) {
-    // 운동 중에는 화면이 꺼지지 않도록 유지
     final keepAwake =
         status == EngineStatus.running || status == EngineStatus.paused;
     if (keepAwake != _wakelockOn) {
@@ -214,29 +226,71 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  // ------------------------------------------------------------ 기록
+
+  /// 완료 / 중도 종료 모두 기록으로 남긴다.
+  Future<void> _saveRecordIfNeeded() async {
+    if (_recordSaved) return;
+    final started = _engine.sessionStartedAt;
+    if (started == null) return;
+    _recordSaved = true;
+
+    final cfg = _engine.config;
+    final activeSec = (_engine.elapsedTotalMs / 1000).round();
+    final progress = _engine.totalProgress.clamp(0.0, 1.0);
+    final completed = _engine.isFinished && progress >= 0.999;
+
+    final rec = WorkoutRecord(
+      id: started.millisecondsSinceEpoch,
+      startedAt: started,
+      endedAt: DateTime.now(),
+      workSeconds: cfg.workSeconds,
+      restSeconds: cfg.restSeconds,
+      rounds: cfg.rounds,
+      sets: cfg.sets,
+      setRestSeconds: cfg.setRestSeconds,
+      plannedSeconds: cfg.totalSeconds,
+      activeSeconds: activeSec,
+      completedRounds: _engine.completedRounds,
+      completedSets: _engine.completedSets,
+      totalRounds: cfg.totalRounds,
+      outcome: completed ? SessionOutcome.completed : SessionOutcome.aborted,
+      progress: progress,
+    );
+
+    final added = await WorkoutStore.add(rec);
+    if (!mounted) return;
+    final records = await WorkoutStore.load(force: true);
+    if (!mounted) return;
+    setState(() => _todayCount = WorkoutStore.today(records).length);
+    if (kDebugMode) debugPrint('record saved: added=$added $rec');
+  }
+
   // ------------------------------------------------------------ 액션
 
   Future<void> _openSettings() async {
     final result = await Navigator.of(context).push<TabataConfig>(
       MaterialPageRoute(builder: (_) => SettingsScreen(initial: _config)),
     );
+    await AudioCoach.instance.stopAll();
     if (result == null || !mounted) return;
     setState(() => _config = result);
     _engine.updateConfig(result);
     await ConfigStore.save(result);
     NotificationService.instance.cancelAll();
-    _applyAudio();
   }
 
-  void _applyAudio() {
-    final c = AudioCoach.instance;
-    c.soundEnabled = _config.soundEnabled;
-    c.voiceEnabled = _config.voiceEnabled;
-    c.sfxEnabled = _config.sfxEnabled;
+  Future<void> _openHistory() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const HistoryScreen()),
+    );
+    final records = await WorkoutStore.load(force: true);
+    if (!mounted) return;
+    setState(() => _todayCount = WorkoutStore.today(records).length);
   }
 
   void _start() {
-    _applyAudio();
+    _recordSaved = false;
     _engine.start();
     NotificationService.instance.scheduleSession(_engine);
   }
@@ -254,7 +308,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
         ),
         content: const Text(
-          '지금 종료하면 진행 상황이 사라집니다.',
+          '지금까지 진행한 내용은 운동 기록에 "중도 종료"로 저장됩니다.',
           style: TextStyle(color: AppColors.textSecondary, fontSize: 13.5),
         ),
         actions: [
@@ -286,7 +340,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (quit == true) {
       NotificationService.instance.cancelAll();
       await AudioCoach.instance.stopAll();
+      // 기록 저장 (중도 종료)
+      await _saveRecordIfNeeded();
       _engine.reset();
+      if (!mounted) return;
       setState(() {
         _screen = AppScreen.ready;
         _hasSavedSession = false;
@@ -298,6 +355,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   void _restart() {
     NotificationService.instance.cancelAll();
+    _recordSaved = false;
     _engine.reset();
     _engine.start();
     NotificationService.instance.scheduleSession(_engine);
@@ -348,7 +406,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
-        // 불필요한 애니메이션 없이 즉시 전환 (구간 색상이 곧바로 바뀌어야 함)
         body: KeyedSubtree(key: ValueKey(_screen), child: _buildScreen()),
       ),
     );
@@ -361,8 +418,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           config: _config,
           onStart: _start,
           onOpenSettings: _openSettings,
+          onOpenHistory: _openHistory,
           hasSavedSession: _hasSavedSession,
           onResumeSession: _resumeSaved,
+          todayCount: _todayCount,
         );
       case AppScreen.running:
         return RunningScreen(
@@ -382,7 +441,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         return FinishedScreen(
           sets: _engine.completedSets,
           totalSets: _config.sets,
-          rounds: _config.totalRounds,
+          rounds: _engine.completedRounds,
           totalRounds: _config.totalRounds,
           elapsedMs: _engine.elapsedTotalMs,
           onRestart: _restart,

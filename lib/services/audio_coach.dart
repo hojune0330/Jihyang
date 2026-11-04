@@ -4,116 +4,152 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// 구간 시작 계열 안내음 종류
-enum CueKind { workStart, restStart, setRestStart, finish }
+import '../models/phase.dart';
+import '../models/tabata_config.dart';
+
+/// 효과음 종류
+enum Sfx {
+  /// 운동 시작 · 다음 라운드 시작
+  startWork('audio/start_work.wav'),
+
+  /// 휴식 시작
+  startRest('audio/start_rest.wav'),
+
+  /// 새 세트 시작
+  setStart('audio/set_start.wav'),
+
+  /// 세트 간 휴식 시작
+  setRest('audio/set_rest.wav'),
+
+  /// 전체 운동 종료
+  finish('audio/finish.wav'),
+
+  /// 짧은 비프 (음성 대체)
+  beep('audio/beep.wav');
+
+  const Sfx(this.asset);
+  final String asset;
+}
+
+/// 구간 → 효과음 매핑 (순수 함수, 테스트로 검증 가능).
+///
+/// - 운동 구간: 세트의 첫 라운드(=새 세트 시작)면 `setStart`, 그 외 `startWork`
+/// - 휴식 구간: `startRest`
+/// - 세트 간 휴식: `setRest`
+/// - 준비 구간: 조용히 (준비가 끝나며 운동 시작음이 울린다)
+Sfx? sfxForPhase(Phase phase) {
+  switch (phase.type) {
+    case PhaseType.prepare:
+      return null;
+    case PhaseType.work:
+      if (phase.roundIndex == 1 && phase.setIndex > 1) return Sfx.setStart;
+      return Sfx.startWork;
+    case PhaseType.rest:
+      return Sfx.startRest;
+    case PhaseType.setRest:
+      return Sfx.setRest;
+  }
+}
 
 /// 재생 기록 (타이머-사운드 싱크 검증용)
 class PlayLogEntry {
-  PlayLogEntry({
-    required this.asset,
-    required this.requestedAt,
-    required this.requestedWallMs,
-  });
+  PlayLogEntry({required this.asset, required this.wallMs, required this.kind});
 
   final String asset;
-  final Duration requestedAt;
-  final int requestedWallMs;
+  final int wallMs;
+  final String kind; // 'sfx' | 'voice'
 
   @override
-  String toString() =>
-      'PlayLog(asset=$asset, at=${requestedAt.inMilliseconds}ms)';
+  String toString() => 'PlayLog($kind $asset @${wallMs % 100000})';
 }
 
 /// 사운드 출력 담당.
 ///
 /// 설계 원칙
-///  1. **효과음과 음성을 하나의 파일로 미리 합성**해 두었다(`cue_*.wav`).
-///     → 두 플레이어가 동시에 울려 겹치는 상황 자체가 발생하지 않는다.
-///  2. 숫자 카운트다운은 실시간 TTS가 아니라 **미리 녹음한 wav**를 쓴다.
-///     → 합성 지연이 없고 재생 길이가 항상 일정하다.
-///  3. 자산별로 전용 플레이어를 미리 준비(preload)해 두고 `seek(0)+resume()`만 한다.
-///     → 재생 시작 지연이 수십 ms 수준으로 일정하다.
-///  4. **시간을 계산하지 않는다.** 언제 울릴지는 [TabataEngine]이 단일 벽시계로
-///     결정하고, 이 클래스는 "지금 이 소리를 내라"는 지시만 수행한다.
+/// ---------
+/// 1. **시간을 계산하지 않는다.** 언제 울릴지는 [TabataEngine]이 단일 벽시계로
+///    결정하고, 이 클래스는 "지금 이 소리를 내라"는 지시만 수행한다.
+/// 2. **효과음과 음성은 서로 다른 플레이어**를 쓴다. 같은 순간에 겹치지 않도록
+///    엔진이 시점을 분리해 지시하고, 여기서는 최소 간격만 보장한다.
+/// 3. 숫자 카운트다운은 미리 녹음된 wav → 재생 길이가 항상 일정하다.
+/// 4. 모든 자산은 미리 preload 후 `seek(0)+resume()` 만 한다 → 시작 지연 최소화.
 class AudioCoach {
   AudioCoach._();
   static final AudioCoach instance = AudioCoach._();
 
   // ------------------------------------------------------------- 설정
 
-  /// 전체 사운드 (마스터)
   bool soundEnabled = true;
-
-  /// 음성 카운트다운 + 구간 음성 안내
   bool voiceEnabled = true;
-
-  /// 효과음 (알림음/비프)
   bool sfxEnabled = true;
+  VoiceStyle voiceStyle = VoiceStyle.male;
+  double sfxVolume = 0.9;
+  double voiceVolume = 0.9;
 
-  bool get _anySound => soundEnabled && (voiceEnabled || sfxEnabled);
+  bool get _anySound => soundEnabled;
+
+  /// 설정 반영
+  void applyConfig(TabataConfig c) {
+    soundEnabled = c.soundEnabled;
+    voiceEnabled = c.voiceEnabled;
+    sfxEnabled = c.sfxEnabled;
+    voiceStyle = c.voiceStyle;
+    sfxVolume = c.sfxVolume;
+    voiceVolume = c.voiceVolume;
+    _applyVolumes();
+  }
 
   // ------------------------------------------------------------- 플레이어
 
   final Map<String, AudioPlayer> _players = <String, AudioPlayer>{};
-
-  /// 현재 재생 중인 '구간 안내' 플레이어 (새 안내 시 정지)
-  final Set<String> _cueAssets = <String>{};
-
-  /// 카운트다운 전용 플레이어 (숫자별)
-  final Set<String> _countAssets = <String>{};
-
   bool _ready = false;
-
-  /// 웹은 자동재생 정책 때문에 첫 사용자 제스처 이후에만 소리가 난다.
   bool get isReady => _ready;
 
-  /// 검증용 재생 로그 (최근 120개)
+  /// 현재 재생 중인 효과음 자산
+  final Set<String> _activeSfx = <String>{};
+
+  /// 현재 재생 중인 음성 자산
+  final Set<String> _activeVoice = <String>{};
+
+  /// 마지막 효과음 재생 시각 (겹침 방지 간격 판단)
+  int _lastSfxAtMs = 0;
+
+  /// 검증용 재생 로그
   final List<PlayLogEntry> playLog = <PlayLogEntry>[];
 
-  // ------------------------------------------------------------- 초기화
-
   Future<void> init() async {
-    // 플러그인 준비만 확인하고, 실제 자산 프리로드는 warmUp에서 한다.
     _ready = true;
   }
 
-  /// 필요한 자산을 미리 메모리에 올려 둔다.
-  /// 운동 시작 직전에 호출하면 첫 소리도 지연 없이 난다.
+  void _applyVolumes() {
+    // 효과음 / 음성 플레이어에 각각 볼륨 적용
+    for (final e in _players.entries) {
+      final isVoice = e.key.contains('c_') || e.key.contains('preview_');
+      e.value
+          .setVolume(isVoice ? voiceVolume : sfxVolume)
+          .catchError((_) => null);
+    }
+  }
+
+  /// 필요한 자산을 미리 올려 둔다. 운동 시작 직전 호출 → 첫 소리 지연 없음.
   Future<void> warmUp() async {
     final assets = <String>{};
-    if (_anySound) {
-      if (voiceEnabled && sfxEnabled) {
-        assets.addAll(const [
-          'audio/cue_work.wav',
-          'audio/cue_rest.wav',
-          'audio/cue_setrest.wav',
-          'audio/cue_finish.wav',
-        ]);
-      } else if (sfxEnabled) {
-        assets.addAll(const [
-          'audio/start_work.wav',
-          'audio/start_rest.wav',
-          'audio/set_rest.wav',
-          'audio/finish.wav',
-        ]);
-      } else if (voiceEnabled) {
-        assets.addAll(const [
-          'audio/voice_work.wav',
-          'audio/voice_rest.wav',
-          'audio/voice_setrest.wav',
-          'audio/voice_finish.wav',
-        ]);
-      }
 
-      if (voiceEnabled) {
-        for (var n = 5; n >= 1; n--) {
-          assets.add('audio/count_$n.wav');
-        }
-      } else if (sfxEnabled) {
-        assets.add('audio/beep.wav');
+    if (sfxEnabled && _anySound) {
+      assets.addAll(const [
+        'audio/start_work.wav',
+        'audio/start_rest.wav',
+        'audio/set_start.wav',
+        'audio/set_rest.wav',
+        'audio/finish.wav',
+        'audio/beep.wav',
+      ]);
+    }
+    if (voiceEnabled && _anySound) {
+      for (var n = 5; n >= 1; n--) {
+        assets.add('audio/c_${voiceStyle.assetKey}_$n.wav');
       }
     }
-
     for (final a in assets) {
       unawaited(_load(a));
     }
@@ -123,9 +159,10 @@ class AudioCoach {
     final existing = _players[asset];
     if (existing != null) return existing;
     try {
+      final isVoice = asset.contains('c_') || asset.contains('preview_');
       final p = AudioPlayer();
       await p.setReleaseMode(ReleaseMode.stop);
-      await p.setVolume(1.0);
+      await p.setVolume(isVoice ? voiceVolume : sfxVolume);
       await p.setSource(AssetSource(asset));
       _players[asset] = p;
       return p;
@@ -135,113 +172,112 @@ class AudioCoach {
     }
   }
 
-  // ------------------------------------------------------------- 재생
-
-  Future<void> _play(String asset) async {
-    if (!_anySound) return;
+  Future<void> _play(String asset, {required bool isVoice}) async {
     final p = await _load(asset);
     if (p == null) return;
-    final sw = Stopwatch()..start();
     try {
       await p.seek(Duration.zero);
       await p.resume();
-      _log(asset, sw.elapsed);
+      _log(asset, isVoice);
     } catch (e) {
       if (kDebugMode) debugPrint('audio play failed($asset): $e');
     }
   }
 
-  void _log(String asset, Duration elapsed) {
+  void _log(String asset, bool isVoice) {
     if (!kDebugMode) return;
     playLog.add(
       PlayLogEntry(
         asset: asset,
-        requestedAt: elapsed,
-        requestedWallMs: DateTime.now().millisecondsSinceEpoch,
+        wallMs: DateTime.now().millisecondsSinceEpoch,
+        kind: isVoice ? 'voice' : 'sfx',
       ),
     );
-    if (playLog.length > 120) playLog.removeAt(0);
+    if (playLog.length > 300) playLog.removeAt(0);
   }
 
-  /// 구간 시작 안내 — 효과음과 음성이 **한 파일**이므로 절대 겹치지 않는다.
-  void playCue(CueKind kind) {
-    if (!_anySound) return;
-    final asset = _cueAsset(kind);
-    if (asset == null) return;
+  // ------------------------------------------------------------- 효과음
 
-    // 이전 구간 안내가 아직 울리고 있으면 먼저 끊는다 (중복/겹침 방지)
-    for (final other in _cueAssets) {
-      if (other == asset) continue;
+  /// 효과음 재생. 이전 효과음이 끝나지 않았으면 끊고 새로 재생한다.
+  void playSfx(Sfx sfx) {
+    if (!_anySound || !sfxEnabled) return;
+    // 음성 카운트다운이 울리는 중이면 효과음을 살짝 늦춰 겹침을 피한다.
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final gap = now - _lastSfxAtMs;
+    _lastSfxAtMs = now;
+    if (gap < 90) return; // 같은 순간 중복 요청 차단
+
+    for (final other in _activeSfx) {
+      if (other == sfx.asset) continue;
       _players[other]?.stop().catchError((_) {});
     }
-    _cueAssets
+    _activeSfx
       ..clear()
-      ..add(asset);
-    unawaited(_play(asset));
+      ..add(sfx.asset);
+    unawaited(_play(sfx.asset, isVoice: false));
   }
 
-  String? _cueAsset(CueKind kind) {
-    if (voiceEnabled && sfxEnabled) {
-      return switch (kind) {
-        CueKind.workStart => 'audio/cue_work.wav',
-        CueKind.restStart => 'audio/cue_rest.wav',
-        CueKind.setRestStart => 'audio/cue_setrest.wav',
-        CueKind.finish => 'audio/cue_finish.wav',
-      };
-    }
-    if (sfxEnabled) {
-      return switch (kind) {
-        CueKind.workStart => 'audio/start_work.wav',
-        CueKind.restStart => 'audio/start_rest.wav',
-        CueKind.setRestStart => 'audio/set_rest.wav',
-        CueKind.finish => 'audio/finish.wav',
-      };
-    }
-    if (voiceEnabled) {
-      return switch (kind) {
-        CueKind.workStart => 'audio/voice_work.wav',
-        CueKind.restStart => 'audio/voice_rest.wav',
-        CueKind.setRestStart => 'audio/voice_setrest.wav',
-        CueKind.finish => 'audio/voice_finish.wav',
-      };
-    }
-    return null;
-  }
-
-  /// 마지막 5초 카운트다운 — 5,4,3,2,1
-  ///
-  /// 음성이 꺼져 있고 효과음만 켜져 있으면 짧은 비프로 대체한다.
+  /// 음성 카운트다운 숫자 재생 (5→1).
+  /// 음성이 꺼져 있으면 비프로 대체.
   void playCount(int n) {
     if (!_anySound) return;
-    final asset = voiceEnabled ? 'audio/count_$n.wav' : 'audio/beep.wav';
-    // 카운트다운은 숫자별 전용 플레이어 → 이전 숫자를 끊지 않는다.
-    _countAssets.add(asset);
-    unawaited(_play(asset));
+    if (!voiceEnabled) {
+      if (sfxEnabled) playSfx(Sfx.beep);
+      return;
+    }
+    final asset = 'audio/c_${voiceStyle.assetKey}_$n.wav';
+    _activeVoice.add(asset);
+    unawaited(_play(asset, isVoice: true));
   }
 
-  /// 일시정지/종료 시 즉시 모든 소리를 끊는다.
+  /// 미리 듣기 — "오 사 삼 이 일" 연속 샘플
+  Future<void> previewVoice(VoiceStyle style) async {
+    if (!_anySound) return;
+    await stopVoice();
+    await _play('audio/preview_${style.name}.wav', isVoice: true);
+  }
+
+  /// 효과음 미리 듣기
+  Future<void> previewSfx(Sfx sfx) async {
+    if (!_anySound) return;
+    await stopSfx();
+    await _play(sfx.asset, isVoice: false);
+  }
+
+  /// 효과음만 정지
+  Future<void> stopSfx() async {
+    for (final a in _activeSfx) {
+      try {
+        await _players[a]?.stop();
+      } catch (_) {}
+    }
+    _activeSfx.clear();
+  }
+
+  /// 음성만 정지
+  Future<void> stopVoice() async {
+    for (final a in _activeVoice) {
+      try {
+        await _players[a]?.stop();
+      } catch (_) {}
+    }
+    _activeVoice.clear();
+  }
+
+  /// 전체 정지 (일시정지/종료)
   Future<void> stopAll() async {
+    await stopSfx();
+    await stopVoice();
+    // 미리듣기 등 남은 플레이어도 정지
     for (final p in _players.values) {
       try {
         await p.stop();
       } catch (_) {}
     }
-    _cueAssets.clear();
-    _countAssets.clear();
-  }
-
-  /// 카운트다운만 즉시 취소 (일시정지)
-  Future<void> stopCountdown() async {
-    for (final a in _countAssets) {
-      try {
-        await _players[a]?.stop();
-      } catch (_) {}
-    }
-    _countAssets.clear();
   }
 
   void vibrate({bool heavy = false}) {
-    if (!soundEnabled) return;
+    if (!_anySound) return;
     HapticFeedback.mediumImpact().catchError((_) {});
     if (heavy) HapticFeedback.heavyImpact().catchError((_) {});
   }

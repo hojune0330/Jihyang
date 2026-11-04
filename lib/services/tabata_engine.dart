@@ -89,6 +89,10 @@ class TabataEngine extends ChangeNotifier {
   /// 이 구간에서 이미 안내한 카운트다운 숫자
   final Set<int> _announced = <int>{};
 
+  /// 구간 시작 후 이 시간(ms) 안에 울릴 카운트다운 숫자는 생략한다.
+  /// 전환 효과음(최장 0.67초)과 겹쳐 알아듣기 어려워지는 것을 막는다.
+  static const int _minCountOffsetMs = 700;
+
   // 스케줄러
   final List<Timer> _eventTimers = <Timer>[];
   Timer? _uiTicker;
@@ -100,6 +104,10 @@ class TabataEngine extends ChangeNotifier {
 
   /// (검증용) 사운드를 실제로 켤지 여부. 테스트에서는 끈다.
   bool audioOutputEnabled = true;
+
+  /// 운동 세션 시작 시각 (기록 저장용)
+  DateTime? _sessionStartedAt;
+  DateTime? get sessionStartedAt => _sessionStartedAt;
 
   // -------------------------------------------------------- 시간 계산
 
@@ -263,7 +271,8 @@ class TabataEngine extends ChangeNotifier {
     _announced.clear();
     _completedRounds = 0;
     _completedSets = 0;
-    _phaseStartWall = DateTime.now();
+    _sessionStartedAt = DateTime.now();
+    _phaseStartWall = _sessionStartedAt;
 
     _startUiTicker();
     _enterPhase(currentPhase, isStart: true);
@@ -315,7 +324,12 @@ class TabataEngine extends ChangeNotifier {
       return;
     }
     unawaited(AudioCoach.instance.stopAll());
-    _advanceFrom(elapsedMs: elapsedInPhaseMs, announce: false);
+    // 건너뛰기로 들어간 구간도 '전환 순간'이므로 시작 효과음은 울린다.
+    // (일시정지 상태에서 건너뛰면 소리는 내지 않는다)
+    _advanceFrom(
+      elapsedMs: elapsedInPhaseMs,
+      announce: _status == EngineStatus.running,
+    );
     if (_status == EngineStatus.running) {
       _startUiTicker();
       _scheduleEvents();
@@ -335,10 +349,7 @@ class TabataEngine extends ChangeNotifier {
   // -------------------------------------------------------- 내부
 
   void _applyAudioSettings() {
-    final c = AudioCoach.instance;
-    c.soundEnabled = _config.soundEnabled;
-    c.voiceEnabled = _config.voiceEnabled;
-    c.sfxEnabled = _config.sfxEnabled;
+    AudioCoach.instance.applyConfig(_config);
   }
 
   void _startUiTicker() {
@@ -402,6 +413,12 @@ class TabataEngine extends ChangeNotifier {
         if (_announced.contains(n)) continue;
         final atMs = durationMs - n * 1000;
         final delayMs = atMs - elapsed;
+        // 구간 시작 700ms 이내에 울릴 숫자는 전환 효과음과 겹친다.
+        // (예: 4초 운동 → 4는 생략, 3·2·1만 안내) → 소리가 뭉개지지 않는다.
+        if (atMs < _minCountOffsetMs) {
+          _announced.add(n);
+          continue;
+        }
         if (delayMs < -250) {
           // 이미 지난 숫자(복귀 직후 등)는 건너뛴다 — 몰아서 재생하지 않는다.
           _announced.add(n);
@@ -518,21 +535,20 @@ class TabataEngine extends ChangeNotifier {
     if (phase == null) return;
     _recordOnEnter(phase);
     _applyAudioSettings();
+    // 구간 → 효과음 매핑은 순수 함수 한 곳에서만 결정한다.
+    // (재생 여부와 무관하게 '어떤 소리가 선택됐는지'는 항상 기록 → 검증 가능)
+    final sfx = sfxForPhase(phase);
+    _lastPhaseSfx = sfx;
     if (!audioOutputEnabled) return;
 
     final coach = AudioCoach.instance;
-    switch (phase.type) {
-      case PhaseType.prepare:
-        break; // 준비 구간은 조용히 (카운트다운 후 시작음)
-      case PhaseType.work:
-        coach.playCue(CueKind.workStart);
-        coach.vibrate();
-      case PhaseType.rest:
-        coach.playCue(CueKind.restStart);
-      case PhaseType.setRest:
-        coach.playCue(CueKind.setRestStart);
-    }
+    if (sfx != null) coach.playSfx(sfx);
+    if (phase.type == PhaseType.work) coach.vibrate();
   }
+
+  /// (검증용) 마지막으로 예약한 구간 전환 효과음
+  Sfx? get lastPhaseSfx => _lastPhaseSfx;
+  Sfx? _lastPhaseSfx;
 
   void _recordOnEnter(Phase phase) {
     if (!kDebugMode) return;
@@ -557,7 +573,7 @@ class TabataEngine extends ChangeNotifier {
     _completedSets = _config.sets;
     _completedRounds = _config.sets * _config.rounds;
     if (audioOutputEnabled) {
-      AudioCoach.instance.playCue(CueKind.finish);
+      AudioCoach.instance.playSfx(Sfx.finish);
     }
     notifyListeners();
   }

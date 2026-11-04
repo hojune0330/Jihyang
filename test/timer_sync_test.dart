@@ -71,27 +71,27 @@ void main() {
         ..audioOutputEnabled = false;
       final sw = Stopwatch()..start();
       e.start();
+      e.skip(); // 준비 구간을 건너뛰고 바로 운동부터 측정
       await Future<void>.delayed(const Duration(milliseconds: 8800));
 
       final enters = e.cueLog
           .where((c) => c.label.startsWith('enter:'))
           .toList();
-      // 준비 + 운동 + 휴식 + (세트1 2라운드 → 세트끝: 휴식 없음) + 운동 = 4구간 진입
-      // 시작 1회 + 전환 3회 이상
       expect(enters.length, greaterThanOrEqualTo(4));
 
       // work → rest 전환은 정확히 두 번의 'enter:work' 뒤 첫 'enter:rest'
       final types = enters.map((c) => c.phaseType).toList();
-      expect(types.first, 'prepare');
       expect(types.contains('work'), true);
       expect(types.contains('rest'), true);
 
-      // 전환 시각 오차: 각 enter 의 실제 시각 차이가 구간 길이와 ±80ms 이내
-      for (var i = 1; i < enters.length; i++) {
-        final prev = enters[i - 1];
-        final gap = enters[i].actualWallMs - prev.actualWallMs;
+      // 전환 시각 오차: 각 enter 의 실제 시각 차이가 구간 길이와 ±90ms 이내
+      // (첫 항목은 start() 가 기록한 준비 구간이고 skip 으로 즉시 넘어갔으므로 제외)
+      final transitions = enters.sublist(1);
+      for (var i = 1; i < transitions.length; i++) {
+        final prev = transitions[i - 1];
+        final gap = transitions[i].actualWallMs - prev.actualWallMs;
         final expectedMs = switch (prev.phaseType) {
-          'prepare' => 3000,
+          'prepare' => TabataConfig.prepareSeconds * 1000,
           'work' => 2000,
           'rest' => 2000,
           _ => 2000,
@@ -100,7 +100,7 @@ void main() {
           (gap - expectedMs).abs(),
           lessThanOrEqualTo(90),
           reason:
-              '${prev.phaseType} → ${enters[i].phaseType} 간격 ${gap}ms '
+              '${prev.phaseType} → ${transitions[i].phaseType} 간격 ${gap}ms '
               '(기대 ${expectedMs}ms)',
         );
       }
@@ -194,8 +194,8 @@ void main() {
         config: cfg(work: 1, rest: 0, rounds: 1, sets: 2, setRest: 1),
       )..audioOutputEnabled = false;
       e.start();
-      // 준비(3) + 운동(1) + 세트휴식(1) + 운동(1) = 6초 + 여유
-      await Future<void>.delayed(const Duration(milliseconds: 7000));
+      // 준비(10) + 운동(1) + 세트휴식(1) + 운동(1) = 13초 + 여유
+      await Future<void>.delayed(const Duration(milliseconds: 14000));
 
       final types = e.cueLog
           .where((c) => c.label.startsWith('enter:'))
@@ -226,7 +226,8 @@ void main() {
       final e = TabataEngine(config: cfg(work: 2, rest: 0, rounds: 1))
         ..audioOutputEnabled = false;
       e.start();
-      await Future<void>.delayed(const Duration(milliseconds: 5200));
+      // 준비(10) + 운동(2) = 12초 + 여유
+      await Future<void>.delayed(const Duration(milliseconds: 13000));
       expect(e.isFinished, true);
 
       e.cueLog.clear();
@@ -236,7 +237,8 @@ void main() {
       e.skip();
       await Future<void>.delayed(const Duration(milliseconds: 2200));
       final counts = e.cueLog.where((c) => c.label.startsWith('count')).length;
-      expect(counts, 2, reason: '2초 구간 → 2,1 두 번이어야 한다: $counts');
+      // 2초 구간: 시작음과 겹치는 '2' 는 생략되고 '1' 만 남는다
+      expect(counts, 1, reason: '2초 구간 → 1 한 번이어야 한다: $counts');
       e.dispose();
     });
   });

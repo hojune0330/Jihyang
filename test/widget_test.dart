@@ -97,12 +97,22 @@ void main() {
       final e = TabataEngine(config: cfg(work: 1, rest: 1, rounds: 2));
       e.start();
       expect(e.currentPhase?.type, PhaseType.prepare);
-      // 준비 3초
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      // 준비 10초가 정확히 유지되어야 한다
+      await Future<void>.delayed(const Duration(milliseconds: 6000));
       expect(e.currentPhase?.type, PhaseType.prepare);
-      await Future<void>.delayed(const Duration(milliseconds: 2200));
+      expect(e.remainingSeconds, lessThanOrEqualTo(5));
+      await Future<void>.delayed(const Duration(milliseconds: 4300));
+      // 10.3초 경과 → 이미 운동 구간
       expect(e.currentPhase?.type, PhaseType.work);
       e.dispose();
+    });
+
+    test('준비시간은 정확히 10초다', () {
+      const c = TabataConfig();
+      expect(TabataConfig.prepareSeconds, 10);
+      final prepare = c.buildPhases().first;
+      expect(prepare.type, PhaseType.prepare);
+      expect(prepare.duration, 10);
     });
 
     test('남은 시간이 실제 경과 시간 기준으로 감소한다', () async {

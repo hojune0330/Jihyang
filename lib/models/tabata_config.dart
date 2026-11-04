@@ -1,5 +1,26 @@
 import 'phase.dart';
 
+/// 카운트다운 음성 종류
+enum VoiceStyle {
+  male('남성', '또렷하고 안정적인 코치 목소리'),
+  female('여성', '밝고 경쾌한 에너지 넘치는 목소리'),
+  cute('캐릭터', '명랑하고 귀여운 캐릭터 목소리');
+
+  const VoiceStyle(this.label, this.description);
+
+  final String label;
+  final String description;
+
+  String get assetKey => name; // c_male_5.wav / c_female_5.wav / c_cute_5.wav
+
+  static VoiceStyle fromName(String? v) {
+    for (final s in VoiceStyle.values) {
+      if (s.name == v) return s;
+    }
+    return VoiceStyle.male;
+  }
+}
+
 /// 타바타 설정값.
 ///
 /// 시간은 모두 '초' 단위로 보관하고, 화면에서는 분/초로 나누어 보여준다.
@@ -13,6 +34,9 @@ class TabataConfig {
     this.soundEnabled = true,
     this.voiceEnabled = true,
     this.sfxEnabled = true,
+    this.voiceStyle = VoiceStyle.male,
+    this.sfxVolume = 0.9,
+    this.voiceVolume = 0.9,
   });
 
   /// 운동 시간(초)
@@ -30,17 +54,26 @@ class TabataConfig {
   /// 세트 간 휴식(초)
   final int setRestSeconds;
 
-  /// 전체 사운드 마스터 스위치 (끄면 음성/효과음 모두 무음)
+  /// 전체 사운드 마스터 스위치
   final bool soundEnabled;
 
-  /// 음성 안내 사용
+  /// 음성 카운트다운 사용
   final bool voiceEnabled;
 
   /// 효과음 사용
   final bool sfxEnabled;
 
-  /// 시작 전 카운트다운 — 설정 항목으로 노출하지 않고 고정
-  static const int prepareSeconds = 3;
+  /// 카운트다운 목소리 종류
+  final VoiceStyle voiceStyle;
+
+  /// 효과음 볼륨 0.0 ~ 1.0
+  final double sfxVolume;
+
+  /// 음성 볼륨 0.0 ~ 1.0
+  final double voiceVolume;
+
+  /// 운동 시작 전 준비 시간 — 고정 10초
+  static const int prepareSeconds = 10;
 
   int get workMinutes => workSeconds ~/ 60;
   int get workSecondsPart => workSeconds % 60;
@@ -58,6 +91,9 @@ class TabataConfig {
     bool? soundEnabled,
     bool? voiceEnabled,
     bool? sfxEnabled,
+    VoiceStyle? voiceStyle,
+    double? sfxVolume,
+    double? voiceVolume,
   }) {
     return TabataConfig(
       workSeconds: workSeconds ?? this.workSeconds,
@@ -68,13 +104,19 @@ class TabataConfig {
       soundEnabled: soundEnabled ?? this.soundEnabled,
       voiceEnabled: voiceEnabled ?? this.voiceEnabled,
       sfxEnabled: sfxEnabled ?? this.sfxEnabled,
+      voiceStyle: voiceStyle ?? this.voiceStyle,
+      sfxVolume: sfxVolume ?? this.sfxVolume,
+      voiceVolume: voiceVolume ?? this.voiceVolume,
     );
   }
 
-  /// 1세트 시간(초)
+  /// 1세트 시간(초) — 마지막 라운드 뒤에는 휴식이 없다.
   int get setSeconds => rounds * workSeconds + (rounds - 1) * restSeconds;
 
   /// 전체 예상 시간(초)
+  ///
+  /// 준비 + 세트별 (운동·휴식) + 세트 사이 휴식.
+  /// 마지막 라운드 뒤 휴식과 마지막 세트 뒤 세트휴식은 포함하지 않는다.
   int get totalSeconds =>
       prepareSeconds + sets * setSeconds + (sets - 1) * setRestSeconds;
 
@@ -83,6 +125,11 @@ class TabataConfig {
 
   /// 전체 라운드 수(세트 포함)
   int get totalRounds => sets * rounds;
+
+  /// buildPhases() 가 만드는 실제 구간 길이의 합.
+  /// totalSeconds 와 반드시 같아야 한다 (테스트로 검증).
+  int get phasesTotalSeconds =>
+      buildPhases().fold<int>(0, (a, p) => a + p.duration);
 
   List<Phase> buildPhases() {
     final phases = <Phase>[];
@@ -149,6 +196,9 @@ class TabataConfig {
     'soundEnabled': soundEnabled,
     'voiceEnabled': voiceEnabled,
     'sfxEnabled': sfxEnabled,
+    'voiceStyle': voiceStyle.name,
+    'sfxVolume': sfxVolume,
+    'voiceVolume': voiceVolume,
   };
 
   factory TabataConfig.fromJson(Map<String, dynamic> json) {
@@ -164,6 +214,12 @@ class TabataConfig {
       return v is bool ? v : fallback;
     }
 
+    double readDouble(String key, double fallback) {
+      final v = json[key];
+      if (v is num) return v.toDouble().clamp(0.0, 1.0);
+      return fallback;
+    }
+
     return TabataConfig(
       workSeconds: readInt('workSeconds', 30).clamp(5, 3600),
       restSeconds: readInt('restSeconds', 15).clamp(0, 3600),
@@ -173,6 +229,9 @@ class TabataConfig {
       soundEnabled: readBool('soundEnabled', true),
       voiceEnabled: readBool('voiceEnabled', true),
       sfxEnabled: readBool('sfxEnabled', true),
+      voiceStyle: VoiceStyle.fromName(json['voiceStyle'] as String?),
+      sfxVolume: readDouble('sfxVolume', 0.9),
+      voiceVolume: readDouble('voiceVolume', 0.9),
     );
   }
 }
