@@ -35,13 +35,8 @@ class AppColors {
   static const Color workBg = work;
   static const Color restBg = rest;
 
-  /// 준비 화면 배경.
-  ///
-  /// 요구사항: "준비 화면 글자색은 화이트".
-  /// 소프트 옐로(#E8C96D) 위 흰 글자는 대비가 1.6:1 로 읽히지 않는다.
-  /// 그래서 준비 배경만 **따뜻한 다크 차콜**로 두고, 옐로는 포인트 색으로만 쓴다.
-  /// → 흰 글자 대비 15:1, 운동(코랄)·휴식(블루)과도 한눈에 구분된다.
-  static const Color prepareBg = Color(0xFF1C1913);
+  /// 준비 화면 배경 — 기존 소프트 옐로 그대로.
+  static const Color prepareBg = prepare;
 
   // ---------------------------------------------------------------
   // 글자
@@ -66,10 +61,7 @@ class AppColors {
     _ => prepareBg,
   };
 
-  /// 배경 위에 올릴 기본 글자색
-  ///
-  /// 준비 화면도 **화이트**다 (요구사항). 준비 배경을 다크 차콜로 둔 이유가 이것이며,
-  /// 옐로는 라벨·포인트에만 쓴다.
+  /// 배경 위에 올릴 기본 글자색 — 모든 구간 화이트.
   static Color onBgOf(String phaseType) => const Color(0xFFFFFFFF);
 
   /// 다크 화면에서 쓰는 강조색
@@ -92,6 +84,16 @@ class AppColors {
   /// 다크 화면에서 상태색을 은은하게 깔아 쓰는 카드 배경
   static Color tinted(Color accent) =>
       Color.alphaBlend(accent.withValues(alpha: 0.14), surface);
+
+  /// 옅은 배경(준비 옐로 등) 위 흰 글자가 떠 보이지 않도록 주는 최소한의 그림자.
+  ///
+  /// 장식이 아니라 가독성 보정이다 — 흰 글자가 배경과 경계를 잃는 것을 막는다.
+  static List<Shadow>? shadowOn(String phaseType) {
+    if (phaseType != 'prepare') return null;
+    return const [
+      Shadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 1.5)),
+    ];
+  }
 }
 
 class AppTheme {

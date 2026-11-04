@@ -106,6 +106,15 @@ class RunningScreen extends StatelessWidget {
                   fontSize: 26,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1.2,
+                  // 소프트 옐로 배경 위 흰 글자가 살짝 떠 보이지 않도록
+                  // 얇은 그림자로 경계를 잡아 준다 (장식 아님, 가독성 목적).
+                  shadows: const [
+                    Shadow(
+                      color: Color(0x2E000000),
+                      blurRadius: 6,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
                 ),
               ),
               if (paused) ...[

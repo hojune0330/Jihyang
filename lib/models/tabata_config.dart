@@ -3,20 +3,22 @@ import 'phase.dart';
 /// 카운트다운 · 상태 안내 음성 종류
 enum VoiceStyle {
   male('남성', '또렷하고 안정적인 코치 목소리'),
-  female('여성 40·50대', '차분하고 낮은 톤의 선생님 목소리'),
-  cute('캐릭터', '명랑하고 귀여운 캐릭터 목소리');
+  female('여성', '차분하고 낮은 톤의 선생님 목소리'),
+  baby('아기', '귀엽고 잔망스러운 캐릭터 목소리');
 
   const VoiceStyle(this.label, this.description);
 
   final String label;
   final String description;
 
-  String get assetKey => name; // c_male_5.wav / c_female_5.wav / c_cute_5.wav
+  String get assetKey => name; // c_male_5.wav / c_female_5.wav / c_baby_5.wav
 
   static VoiceStyle fromName(String? v) {
     for (final s in VoiceStyle.values) {
       if (s.name == v) return s;
     }
+    // 이전 버전에서 저장된 'cute' 설정을 그대로 이어받는다
+    if (v == 'cute') return VoiceStyle.baby;
     return VoiceStyle.male;
   }
 }
@@ -35,8 +37,8 @@ class TabataConfig {
     this.voiceEnabled = true,
     this.sfxEnabled = true,
     this.voiceStyle = VoiceStyle.male,
-    this.sfxVolume = 0.9,
-    this.voiceVolume = 0.9,
+    this.sfxVolume = 1.0,
+    this.voiceVolume = 1.0,
   });
 
   /// 운동 시간(초)
@@ -230,8 +232,8 @@ class TabataConfig {
       voiceEnabled: readBool('voiceEnabled', true),
       sfxEnabled: readBool('sfxEnabled', true),
       voiceStyle: VoiceStyle.fromName(json['voiceStyle'] as String?),
-      sfxVolume: readDouble('sfxVolume', 0.9),
-      voiceVolume: readDouble('voiceVolume', 0.9),
+      sfxVolume: readDouble('sfxVolume', 1.0),
+      voiceVolume: readDouble('voiceVolume', 1.0),
     );
   }
 }

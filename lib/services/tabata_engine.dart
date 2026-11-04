@@ -613,6 +613,14 @@ class TabataEngine extends ChangeNotifier {
   /// (검증용) 현재 구간의 카운트다운 보호 구간(ms)
   int get announceGuard => _announceGuardMs;
 
+  /// (검증용) 현재 구간의 안내 시각표
+  AnnounceTiming get lastAnnounceTiming => announceTiming(
+    _lastPhasePlan,
+    _config.voiceStyle,
+    sfxEnabled: _config.sfxEnabled,
+    voiceEnabled: _config.voiceEnabled,
+  );
+
   void _recordOnEnter(Phase phase) {
     if (!kDebugMode) return;
     final now = DateTime.now().millisecondsSinceEpoch;

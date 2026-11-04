@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
-"""짧고 선명한 단일 전자음(ATM 버튼음 계열) 효과음 생성기.
+"""경고음 생성기 — '삐-삐-' 두 번 울리는 약 0.9초 신호.
 
-설계 원칙 (요구사항 ④)
-  - 짧고 선명한 **단일** 신호음. 반복음·긴 감미료 금지.
-  - 운동/휴식은 **음높이**로 명확히 구분 (높음=운동, 낮음=휴식).
-  - 주변 소음 속에서도 인식 가능하도록 배음(2·3차)을 살짝 섞어
-    '전자음' 특유의 또렷함을 준다.
-  - 지나치게 날카롭지 않도록 2kHz 이상 성분은 최소화하고,
-    4ms 어택 + 지수 감쇠로 귀를 찌르지 않게 만든다.
+현장 요구사항
+  - 너무 작아서 안 들린다 → **크게** (peak 0.99, RMS 도 높게)
+  - (삐-삐-) 처럼 약 1초 유지
+  - 운동 / 휴식은 음높이로 즉시 구분
+  - 날카롭지 않게 (2kHz 이상 성분 배제, 5ms 어택)
 
-출력: assets/audio/sfx_work.wav, sfx_rest.wav, sfx_finish.wav, beep.wav
+음성 안내를 끈 상태에서는 각 초를 알려주는 짧은 '틱'음(sfx_count)을 쓴다.
 """
 import wave
-import struct
 import numpy as np
 import os
 
@@ -20,22 +17,24 @@ SR = 44100
 OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'audio')
 
 
-def tone(freq, dur, harm=((1, 1.0), (2, 0.16), (3, 0.05)), attack=0.004,
-         decay=40.0):
-    """지수 감쇠하는 짧은 전자음 1개."""
+def beep(freq, dur, harm=((1, 1.0), (2, 0.30), (3, 0.12)), attack=0.005,
+         release=0.030):
+    """한 번 울리는 전자음. 끝을 부드럽게 닫아 '뚝' 끊기는 느낌을 없앤다."""
     n = int(SR * dur)
     t = np.arange(n) / SR
     w = np.zeros(n)
     for h, a in harm:
-        if freq * h > 2000:      # 2kHz 이상은 넣지 않는다 (날카로움 방지)
+        if freq * h > 2000:
             continue
         w += a * np.sin(2 * np.pi * freq * h * t)
 
-    env = np.exp(-t * decay)
+    env = np.ones(n)
     a_n = max(1, int(SR * attack))
-    env[:a_n] *= np.linspace(0.0, 1.0, a_n)
-    tail = max(1, int(SR * 0.008))
-    env[-tail:] *= np.linspace(1.0, 0.0, tail)
+    env[:a_n] = np.linspace(0.0, 1.0, a_n)
+    r_n = max(1, int(SR * release))
+    env[-r_n:] = np.linspace(1.0, 0.0, r_n)
+    # 아주 완만한 감쇠 — 끝까지 또렷하게 들리도록
+    env *= np.linspace(1.0, 0.72, n)
     w *= env
 
     peak = np.max(np.abs(w))
@@ -48,7 +47,7 @@ def silence(dur):
     return np.zeros(max(1, int(SR * dur)))
 
 
-def write_wav(name, data, peak=0.90):
+def write_wav(name, data, peak=0.99):
     data = np.asarray(data, dtype=np.float64)
     m = np.max(np.abs(data))
     if m > 0:
@@ -60,26 +59,38 @@ def write_wav(name, data, peak=0.90):
         f.setsampwidth(2)
         f.setframerate(SR)
         f.writeframes(pcm.tobytes())
-    dur = len(pcm) / SR
-    print(f'{name:18s} {dur*1000:6.1f} ms  peak={peak}')
+    rms = np.sqrt(np.mean((pcm / 32768.0) ** 2))
+    print(f'{name:16s} {len(pcm)/SR*1000:6.0f} ms  peak={peak:.2f} rms={rms:.3f}')
+
+
+def double(freq, on=0.32, off=0.20):
+    """삐-삐- : 같은 음높이 두 번."""
+    return np.concatenate([beep(freq, on), silence(off), beep(freq, on)])
 
 
 def main():
-    # 운동 시작 — 높고 또렷한 단일 전자음 (A5 880Hz 계열의 1180Hz)
-    write_wav('sfx_work.wav', tone(1180, 0.095), peak=0.92)
+    # 운동 시작 — 높은 음(삐-삐-), 약 0.84초
+    write_wav('sfx_work.wav', double(1175, 0.32, 0.20), peak=0.99)
 
-    # 휴식 시작 — 낮고 부드러운 단일 전자음 (E4 660Hz)
-    write_wav('sfx_rest.wav', tone(660, 0.110, decay=32.0), peak=0.92)
+    # 휴식 시작 — 낮은 음(삐-삐-), 약 0.84초
+    write_wav('sfx_rest.wav', double(740, 0.32, 0.20), peak=0.99)
 
-    # 전체 종료 — 짧은 2음 상승 (780 -> 1170Hz). 반복음 아님, 총 170ms
+    # 전체 종료 — 세 번 상승(삐-삐-삐-), 약 1.3초
     write_wav(
         'sfx_finish.wav',
-        np.concatenate([tone(780, 0.075), silence(0.012), tone(1170, 0.080)]),
-        peak=0.92,
+        np.concatenate([
+            beep(880, 0.28), silence(0.13),
+            beep(1046, 0.28), silence(0.13),
+            beep(1318, 0.40),
+        ]),
+        peak=0.99,
     )
 
-    # 음성 대체용 중립 비프
-    write_wav('beep.wav', tone(900, 0.080), peak=0.85)
+    # 음성 안내를 끈 상태의 초 알림 — 짧고 또렷한 단일 틱
+    write_wav('sfx_count.wav', beep(1560, 0.11, release=0.020), peak=0.99)
+
+    # 최후 대체용
+    write_wav('beep.wav', beep(1000, 0.13), peak=0.95)
 
 
 if __name__ == '__main__':

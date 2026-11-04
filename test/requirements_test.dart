@@ -140,12 +140,15 @@ void main() {
       expect(Sfx.work.asset == Sfx.rest.asset, false);
     });
 
-    test('모든 효과음은 200ms 이하의 짧은 단일음이다 (반복음·긴 효과음 금지)', () {
-      for (final s in Sfx.values) {
-        expect(s.durationMs, lessThanOrEqualTo(200), reason: s.asset);
-      }
-      expect(Sfx.work.durationMs, lessThanOrEqualTo(120));
-      expect(Sfx.rest.durationMs, lessThanOrEqualTo(120));
+    test('경고음은 약 0.8~1.3초 길이로 충분히 들리는 크기다', () {
+      // 현장 요구: "삐-삐-" 처럼 1초 정도 유지, 너무 작아서 안 들리면 안 됨
+      expect(Sfx.work.durationMs, inInclusiveRange(700, 1100));
+      expect(Sfx.rest.durationMs, inInclusiveRange(700, 1100));
+      expect(Sfx.finish.durationMs, inInclusiveRange(700, 1500));
+      // 음성이 켜져 있을 때 쓰는 짧은 삑은 짧아야 한다 (음성과 겹치지 않게)
+      expect(Sfx.beep.durationMs, lessThanOrEqualTo(200));
+      // 음성이 꺼졌을 때 초를 알리는 틱도 짧고 또렷해야 한다
+      expect(Sfx.count.durationMs, lessThanOrEqualTo(200));
     });
 
     test('엔진이 구간 진입 시 올바른 안내 계획을 선택한다', () async {
@@ -180,13 +183,26 @@ void main() {
       expect(StateVoice.values.length, 6);
     });
 
-    test('성인 여성 목소리는 차분한 40·50대 톤으로 안내된다', () {
-      final d = VoiceStyle.female.description;
-      expect(d.contains('차분'), true, reason: d);
-      expect(d.contains('낮은 톤'), true, reason: d);
-      // '밝고 경쾌한' 같은 고음 피로 유발 표현이 남아 있으면 안 된다
-      expect(d.contains('밝'), false, reason: d);
-      expect(d.contains('경쾌'), false, reason: d);
+    test('목소리 이름과 설명이 요구사항대로다', () {
+      expect(VoiceStyle.male.label, '남성');
+      expect(VoiceStyle.female.label, '여성');
+      expect(VoiceStyle.baby.label, '아기');
+
+      final f = VoiceStyle.female.description;
+      expect(f.contains('차분'), true, reason: f);
+      expect(f.contains('낮은 톤'), true, reason: f);
+      expect(f.contains('밝'), false, reason: f);
+      expect(f.contains('경쾌'), false, reason: f);
+
+      final b = VoiceStyle.baby.description;
+      expect(b.contains('귀엽'), true, reason: b);
+      expect(b.contains('잔망'), true, reason: b);
+    });
+
+    test('이전 버전의 cute 설정은 아기 목소리로 이어진다', () {
+      expect(VoiceStyle.fromName('cute'), VoiceStyle.baby);
+      expect(VoiceStyle.fromName('baby'), VoiceStyle.baby);
+      expect(VoiceStyle.fromName(null), VoiceStyle.male);
     });
   });
 
@@ -282,13 +298,11 @@ void main() {
           );
           final plan = planForPhase(p, totalSets: 2, totalRounds: 3);
           final guard = announceGuardMs(plan, style);
-          var announce = 0;
-          if (plan.sfx != null) announce += sfxToVoiceGapMs;
-          for (final v in plan.voices) {
-            announce += stateVoiceDurationMs(style, v) + voiceToVoiceGapMs;
-          }
-          expect(guard, greaterThan(announce),
-              reason: '$style $type guard=$guard announce=$announce');
+          final timing = announceTiming(plan, style,
+              sfxEnabled: true, voiceEnabled: true);
+          expect(guard, greaterThan(timing.totalMs),
+              reason: '$style $type guard=$guard total=${timing.totalMs}');
+          expect(timing.hasVoice, true);
         }
       }
     });
