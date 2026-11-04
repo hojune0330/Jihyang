@@ -621,29 +621,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(width: 9),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    style.label,
-                    style: TextStyle(
-                      color: enabled
-                          ? AppColors.textPrimary
-                          : AppColors.textTertiary,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    style.description,
-                    style: const TextStyle(
-                      color: AppColors.textTertiary,
-                      fontSize: 11,
-                      height: 1.3,
-                    ),
-                  ),
-                ],
+              child: Text(
+                style.label,
+                style: TextStyle(
+                  color: enabled
+                      ? AppColors.textPrimary
+                      : AppColors.textTertiary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
             IconButton(

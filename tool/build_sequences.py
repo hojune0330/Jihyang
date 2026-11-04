@@ -109,8 +109,8 @@ def main():
                      setRest=1340, lastRound=1100, finish=1580),
         'female': dict(prepare=920, startWork=875, startRest=906,
                        setRest=1340, lastRound=1400, finish=1840),
-        'baby': dict(prepare=680, startWork=940, startRest=980,
-                     setRest=1300, lastRound=1220, finish=2120),
+        'baby': dict(prepare=710, startWork=769, startRest=740,
+                     setRest=1160, lastRound=1140, finish=1590),
     }
 
     print('== 안내 시퀀스 (삑 + 음성, 미리 합침) ==')

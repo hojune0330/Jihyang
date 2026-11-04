@@ -8,14 +8,9 @@ import '../models/phase.dart';
 import '../models/tabata_config.dart';
 
 // ===========================================================================
-// 효과음 (음성 안내를 끈 상태에서 쓰는 단독 신호)
+// 효과음
 // ===========================================================================
 
-/// 경고음 종류.
-///
-/// 안내 음성이 **켜져** 있으면 `seq_*.wav` 파일 하나에 [삑 + 음성]이 미리
-/// 합쳐져 있어 재생 한 번으로 끝난다. 아래 단독 효과음은 **음성을 끈 상태**와
-/// **초 알림(틱)** 에서만 쓴다.
 enum Sfx {
   /// 운동 구간 주의음 — 높은 음 '삐-삐-' (840ms)
   work('audio/sfx_work.wav', 840),
@@ -26,10 +21,10 @@ enum Sfx {
   /// 전체 종료 — 세 번 상승 (1220ms)
   finish('audio/sfx_finish.wav', 1220),
 
-  /// 음성이 켜져 있을 때 쓰는 짧은 주의음 '삑' (130ms)
+  /// 짧은 주의음 '삑' (130ms)
   beep('audio/beep.wav', 130),
 
-  /// 음성이 꺼졌을 때 매초 시간을 알리는 또렷한 틱 (110ms)
+  /// 매초 시간을 알리는 또렷한 틱 (110ms)
   count('audio/sfx_count.wav', 110);
 
   const Sfx(this.asset, this.durationMs);
@@ -39,36 +34,24 @@ enum Sfx {
 }
 
 // ===========================================================================
-// 안내 시퀀스 (삑 + 음성이 미리 합쳐진 단일 파일)
+// 안내 음성
 // ===========================================================================
 
 enum StateVoice {
-  /// "준비하세요."
   prepare('prepare'),
-
-  /// "운동 시작!"
   startWork('startWork'),
-
-  /// "휴식 시작!"
   startRest('startRest'),
-
-  /// "세트 간 휴식입니다."
   setRest('setRest'),
-
-  /// "마지막 라운드입니다."
   lastRound('lastRound'),
-
-  /// "운동이 모두 종료되었습니다."
   finish('finish');
 
   const StateVoice(this.key);
-
   final String key;
 
   String assetFor(VoiceStyle style) => 'audio/st_${style.assetKey}_$key.wav';
 }
 
-/// 삑 소리와 음성 사이 간격 (파일을 만들 때 쓴 값과 동일해야 한다)
+/// 삑 소리와 음성 사이 간격 (파일 생성 시 쓴 값과 동일해야 한다)
 const int attentionGapMs = 90;
 
 /// 음성과 음성 사이 간격
@@ -80,11 +63,10 @@ const int silenceStartMs = 40;
 /// 안내가 끝난 뒤 카운트다운 숫자를 허용하기까지의 여유
 const int guardPaddingMs = 140;
 
-/// 시퀀스 파일 앞부분의 '삑' 길이 (ms) — 효과음을 끈 상태에서 건너뛸 때 쓴다.
+/// 시퀀스 파일 앞부분의 '삑' 길이 (ms)
 const int beepLeadMs = 130;
 
-/// 목소리별 상태 안내 **음성만의** 길이(ms) — 실제 파일 측정값.
-/// (시퀀스 총 길이를 계산하는 기준)
+/// 목소리별 상태 안내 **음성만의** 길이(ms)
 const Map<VoiceStyle, Map<StateVoice, int>> _stDurationMs = {
   VoiceStyle.male: {
     StateVoice.prepare: 740,
@@ -103,12 +85,12 @@ const Map<VoiceStyle, Map<StateVoice, int>> _stDurationMs = {
     StateVoice.finish: 1840,
   },
   VoiceStyle.baby: {
-    StateVoice.prepare: 680,
-    StateVoice.startWork: 940,
-    StateVoice.startRest: 980,
-    StateVoice.setRest: 1300,
-    StateVoice.lastRound: 1220,
-    StateVoice.finish: 2120,
+    StateVoice.prepare: 710,
+    StateVoice.startWork: 769,
+    StateVoice.startRest: 740,
+    StateVoice.setRest: 1160,
+    StateVoice.lastRound: 1140,
+    StateVoice.finish: 1590,
   },
 };
 
@@ -116,7 +98,7 @@ int stateVoiceDurationMs(VoiceStyle style, StateVoice v) =>
     _stDurationMs[style]?[v] ?? 900;
 
 /// 안내 시퀀스 파일의 **실제 길이**(ms) — tool/build_sequences.py 산출값.
-const Map<String, Map<String, int>> _seqDurMs = {
+const Map<String, Map<String, int>> seqDurMs = {
   'male': {
     'prepare': 960,
     'startWork': 1160,
@@ -136,29 +118,27 @@ const Map<String, Map<String, int>> _seqDurMs = {
     'workLast': 2605,
   },
   'baby': {
-    'prepare': 900,
-    'startWork': 1160,
-    'startRest': 1200,
-    'setRest': 1520,
-    'lastRound': 1440,
-    'finish': 2340,
-    'workLast': 2490,
+    'prepare': 930,
+    'startWork': 990,
+    'startRest': 960,
+    'setRest': 1380,
+    'lastRound': 1360,
+    'finish': 1810,
+    'workLast': 2240,
   },
 };
 
 /// 5·4·3·2·1 이 1초 간격으로 들어 있는 묶음 파일의 길이(ms)
-// ignore: unused_element
-const Map<String, int> _cntDurMs = {
+const Map<String, int> cntDurMs = {
   'male': 4449,
   'female': 4424,
-  'baby': 4360,
+  'baby': 4400,
 };
 
 // ===========================================================================
 // 구간 → 안내 계획
 // ===========================================================================
 
-/// 한 구간에 울릴 소리 묶음.
 class AnnouncePlan {
   const AnnouncePlan({
     this.sfx,
@@ -174,7 +154,6 @@ class AnnouncePlan {
 
   bool get isEmpty => sfx == null && voices.isEmpty;
 
-  /// 재생할 시퀀스 파일 (삑 + 음성이 미리 합쳐진 단일 파일)
   String seqAssetFor(VoiceStyle style) => 'audio/seq_${style.assetKey}_$key.wav';
 
   @override
@@ -184,9 +163,6 @@ class AnnouncePlan {
 }
 
 /// 구간 → 안내 계획 (순수 함수).
-///
-/// [sfx] 는 '음성이 꺼졌을 때' 쓸 단독 주의음이다. 음성이 켜져 있으면
-/// 시퀀스 파일 안에 이미 짧은 삑이 들어 있으므로 그대로 재생하면 된다.
 AnnouncePlan planForPhase(
   Phase phase, {
   required int totalSets,
@@ -200,7 +176,6 @@ AnnouncePlan planForPhase(
       return const AnnouncePlan(voices: [StateVoice.prepare], key: 'prepare');
     case PhaseType.work:
       if (isFinalRoundOfSession) {
-        // '운동 시작' + '마지막 라운드' 를 한 파일로 합쳐 둔 것
         return const AnnouncePlan(
           sfx: Sfx.work,
           voices: [StateVoice.startWork, StateVoice.lastRound],
@@ -236,11 +211,6 @@ const AnnouncePlan finishPlan = AnnouncePlan(
 
 // --- 안내 시각표 -----------------------------------------------------------
 
-/// 안내 시퀀스의 절대 시각표.
-///
-/// 실제 재생은 **파일 하나**지만, 카운트다운 보호구간을 계산하려면 각 음성이
-/// 파일 안에서 몇 ms 에 시작하는지 알아야 한다. 파일을 만들 때 쓴 간격과
-/// 아래 계산이 같으므로 어긋날 수 없다.
 class AnnounceTiming {
   const AnnounceTiming({
     this.attention,
@@ -249,16 +219,9 @@ class AnnounceTiming {
     this.sequence,
   });
 
-  /// 실제로 울릴 주의음 (음성 유무에 따라 달라진다)
   final Sfx? attention;
-
-  /// 각 음성이 시작되는 시각(시퀀스 시작 = 0ms 기준)
   final List<int> voiceStartsAt;
-
-  /// 시퀀스 전체 길이(ms)
   final int totalMs;
-
-  /// 재생할 시퀀스 자산 (음성이 켜져 있을 때)
   final String? sequence;
 
   bool get hasVoice => voiceStartsAt.isNotEmpty;
@@ -272,7 +235,6 @@ AnnounceTiming announceTiming(
 }) {
   final hasVoice = voiceEnabled && plan.voices.isNotEmpty;
 
-  // 음성이 없으면 단독 주의음을 그대로 낸다 (삐-삐- 온전히).
   if (!hasVoice) {
     final attention = sfxEnabled ? plan.sfx : null;
     return AnnounceTiming(
@@ -281,18 +243,14 @@ AnnounceTiming announceTiming(
     );
   }
 
-  // 음성이 있으면 파일 하나에 삑 + 음성이 들어 있다.
   final starts = <int>[];
-  var at = sfxEnabled
-      ? beepLeadMs + attentionGapMs
-      : silenceStartMs;
+  var at = sfxEnabled ? beepLeadMs + attentionGapMs : silenceStartMs;
   for (final v in plan.voices) {
     starts.add(at);
     at = at + stateVoiceDurationMs(style, v) + voiceToVoiceGapMs;
   }
 
-  final total = _seqDurMs[style.assetKey]?[plan.key] ??
-      (at - voiceToVoiceGapMs);
+  final total = seqDurMs[style.assetKey]?[plan.key] ?? (at - voiceToVoiceGapMs);
 
   return AnnounceTiming(
     attention: sfxEnabled ? Sfx.beep : null,
@@ -302,7 +260,6 @@ AnnounceTiming announceTiming(
   );
 }
 
-/// 이 시간보다 이른 카운트다운 숫자는 시작 안내와 겹친다고 보고 생략한다.
 int announceGuardMs(
   AnnouncePlan plan,
   VoiceStyle style, {
@@ -332,7 +289,7 @@ class PlayLogEntry {
 
   final String asset;
   final int wallMs;
-  final String kind; // 'seq' | 'sfx' | 'count' | 'preview'
+  final String kind;
   final String? phaseType;
 
   @override
@@ -340,37 +297,131 @@ class PlayLogEntry {
 }
 
 // ===========================================================================
+// 채널 — 역할마다 **플레이어 정확히 1개**
+// ===========================================================================
+
+/// 한 역할(안내 / 카운트 / 효과음 / 미리듣기)을 담당하는 채널.
+///
+/// ## 왜 자산별이 아니라 역할별인가 (겹침의 근본 원인 제거)
+///
+/// 예전 구조는 오디오 파일마다 플레이어를 따로 만들었다. 그러면
+/// "이전 파일을 멈춰라" 라는 요청이 **어느 플레이어를 멈춰야 하는지**
+/// 놓칠 수 있고, 놓친 플레이어는 계속 재생되어 다음 소리와 겹친다.
+///
+/// 역할마다 플레이어가 하나뿐이면 `stop()` 한 번이 그 역할의 소리를
+/// **무조건** 침묵시킨다. 겹칠 플레이어가 존재하지 않는다.
+///
+/// ## 중복 재생 방지
+/// [_gen] 세대 번호를 첫 줄에서 **동기적으로** 올린다. 이미 진행 중이던
+/// 재생 시퀀스는 다음 await 에서 자기 세대가 바뀐 것을 확인하고 스스로
+/// 중단한다. (await 뒤에 점유하던 이전 구조의 경쟁 조건 제거)
+class _Channel {
+  _Channel(this.label);
+
+  final String label;
+
+  /// 플레이어는 **실제로 소리를 낼 때** 만든다.
+  ///
+  /// 싱글턴 생성 시점에 만들면, 오디오 플러그인이 없는 환경(단위 테스트)에서
+  /// `MissingPluginException` 으로 앱 전체가 죽는다. 소리를 끈 상태의
+  /// 테스트·미리보기에서도 안전해야 하므로 지연 생성한다.
+  AudioPlayer? _player;
+  bool _failed = false;
+
+  AudioPlayer? _ensurePlayer() {
+    if (_player != null || _failed) return _player;
+    try {
+      _player = AudioPlayer();
+    } catch (e) {
+      _failed = true;
+      if (kDebugMode) debugPrint('[$label] player creation failed: $e');
+    }
+    return _player;
+  }
+
+  static const Duration _t = Duration(milliseconds: 2500);
+
+  int _gen = 0;
+  bool _configured = false;
+
+  /// 같은 채널에 새 재생이 걸리면 이전 재생은 폐기된다.
+  Future<void> play(
+    String asset, {
+    int startAtMs = 0,
+    required double volume,
+  }) async {
+    final gen = ++_gen; // ← 동기 구간: 즉시 이전 재생 무효화
+    final player = _ensurePlayer();
+    if (player == null) return;
+
+    try {
+      await player.stop().timeout(_t);
+    } catch (_) {}
+    if (gen != _gen) return;
+
+    try {
+      await player.setVolume(volume).timeout(_t);
+      await player.setSource(AssetSource(asset)).timeout(_t);
+      if (gen != _gen) return;
+      if (startAtMs > 0) {
+        await player.seek(Duration(milliseconds: startAtMs)).timeout(_t);
+        if (gen != _gen) return;
+      }
+      await player.resume().timeout(_t);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[$label] play failed($asset): $e');
+    }
+  }
+
+  /// 즉시 침묵. 세대를 올려 진행 중이던 재생도 함께 폐기한다.
+  void stop() {
+    _gen++;
+    final player = _player;
+    if (player == null) return;
+    unawaited(player.stop().timeout(_t).catchError((_) {}));
+  }
+
+  Future<void> configure(AudioContextAndroid? ctx) async {
+    final player = _ensurePlayer();
+    if (player == null) return;
+    if (_configured) return;
+    _configured = true;
+    try {
+      if (ctx != null) {
+        await player.setAudioContext(AudioContext(android: ctx)).timeout(_t);
+      }
+      await player.setReleaseMode(ReleaseMode.stop).timeout(_t);
+    } catch (e) {
+      if (kDebugMode) debugPrint('[$label] configure failed: $e');
+    }
+  }
+
+  Future<void> dispose() async {
+    _gen++;
+    final player = _player;
+    if (player == null) return;
+    try {
+      await player.dispose();
+    } catch (_) {}
+  }
+}
+
+// ===========================================================================
 // AudioCoach
 // ===========================================================================
 
-enum _Role { seq, sfx, count, preview }
-
 /// 사운드 출력 담당.
 ///
-/// ## 끊김을 없애는 핵심 원칙
+/// ## 끊김·겹침·누락을 막는 구조
 ///
-/// 1. **안내 한 번 = 파일 하나 = `resume()` 한 번.**
-///    예전에는 `삑 → 90ms 대기 → 음성` 을 파일 2개로 이어 붙였다. 파일을
-///    바꿀 때마다 `stop → seek → resume` 이 필요하고, 그 사이에 오디오
-///    장치가 비면서 '뚝, 뚝' 끊겼다. 이제 그 간격까지 미리 합쳐 둔
-///    `seq_*.wav` 하나만 재생하므로 **끊길 구간 자체가 없다.**
-///
-/// 2. **카운트다운 5·4·3·2·1 도 파일 하나.**
-///    초마다 다른 파일을 재생하던 것을 1초 간격이 새겨진 `cnt_*.wav`
-///    하나로 바꿨다. 숫자 사이 간격이 ±1ms 로 고정된다.
-///
-/// 3. **오디오 포커스를 요청하지 않는다.**
-///    audioplayers 의 FocusManager 는 포커스를 새로 얻은 플레이어가 생기면
-///    **이전 플레이어를 pause()** 시킨다. 자산마다 플레이어를 쓰는 구조에서
-///    이 동작은 다른 소리를 중간에 잘라먹는다. `audioFocus: none` 으로
-///    요청 자체를 하지 않는다.
-///
-/// 4. **모든 오디오 작업에 타임아웃.**
-///    한 번 멈춘 플레이어가 영구히 무음이 되어 '누락'이 되던 문제를 막는다.
-///
-/// 5. **역할별 단일 슬롯 + 세대 번호.**
-///    일시정지/건너뛰기/구간 전환 시 이전 재생을 확실히 끊고, 뒤늦게
-///    도착한 재생 요청은 스스로 폐기된다.
+/// 1. **역할 = 플레이어 1개.** 안내/카운트/효과음/미리듣기가 각각 플레이어
+///    하나만 쓴다. 멈추라는 요청이 대상을 놓칠 수 없다. (겹침 제거)
+/// 2. **안내 한 번 = 파일 하나 = `resume()` 한 번.** 삑과 음성 사이 간격까지
+///    미리 합쳐 둔 `seq_*.wav` 를 쓴다. 파일 교체가 없으니 끊길 구간이 없다.
+/// 3. **카운트다운도 파일 하나.** 5·4·3·2·1 이 1초 간격으로 녹음된
+///    `cnt_*.wav` 를 '가장 먼저 울릴 숫자' 지점부터 한 번만 재생한다.
+/// 4. **오디오 포커스를 요청하지 않는다.** 요청하면 앞 소리가 pause 된다.
+/// 5. **모든 작업에 타임아웃.** 멈춘 플레이어가 영구 무음이 되지 않는다.
 class AudioCoach {
   AudioCoach._();
 
@@ -394,39 +445,31 @@ class AudioCoach {
     sfxEnabled = c.sfxEnabled;
     sfxVolume = c.sfxVolume;
     voiceVolume = c.voiceVolume;
+    voiceStyle = c.voiceStyle;
     if (styleChanged) {
-      cut();
-      voiceStyle = c.voiceStyle;
-      unawaited(warmUp());
-    } else {
-      voiceStyle = c.voiceStyle;
+      _seq.stop();
+      _count.stop();
+      _preview.stop();
     }
-    _applyVolumes();
   }
 
-  // ------------------------------------------------------------- 상태
+  // ------------------------------------------------------------- 채널
 
-  int _epoch = 0;
-  final Map<_Role, int> _roleSeq = <_Role, int>{};
-  final Map<_Role, String> _current = <_Role, String>{};
-  final Map<String, AudioPlayer> _players = <String, AudioPlayer>{};
-  final Map<String, Future<AudioPlayer>> _preparing =
-      <String, Future<AudioPlayer>>{};
-  final Map<String, Future<void>> _opChain = <String, Future<void>>{};
+  final _Channel _seq = _Channel('seq');
+  final _Channel _count = _Channel('count');
+  final _Channel _sfx = _Channel('sfx');
+  final _Channel _preview = _Channel('preview');
 
   bool _ready = false;
   bool get isReady => _ready;
 
   final List<PlayLogEntry> playLog = <PlayLogEntry>[];
 
-  AudioContextAndroid? _androidContext;
-
-  /// 모든 오디오 작업의 상한. 넘으면 포기하고 다음 요청을 받는다.
-  static const Duration _opTimeout = Duration(milliseconds: 2500);
-
   Future<void> init() async {
     _ready = true;
-    // 오디오 포커스를 요청하지 않는다 (위 설명 3번).
+    // 오디오 포커스를 요청하지 않는다.
+    // 요청하면 audioplayers 가 "새 플레이어가 포커스를 얻었다" 고 판단해
+    // 이전 플레이어를 pause() 시킨다 → 소리가 중간에 잘린다.
     const android = AudioContextAndroid(
       isSpeakerphoneOn: false,
       audioMode: AndroidAudioMode.normal,
@@ -435,301 +478,141 @@ class AudioCoach {
       usageType: AndroidUsageType.media,
       audioFocus: AndroidAudioFocus.none,
     );
-    _androidContext = android;
     try {
       await AudioPlayer.global
           .setAudioContext(AudioContext(android: android))
-          .timeout(_opTimeout);
+          .timeout(const Duration(milliseconds: 2500));
     } catch (e) {
       if (kDebugMode) debugPrint('setAudioContext failed: $e');
     }
+    await Future.wait([
+      _seq.configure(android),
+      _count.configure(android),
+      _sfx.configure(android),
+      _preview.configure(android),
+    ]);
   }
 
-  // ------------------------------------------------------------- 로딩
-
-  bool _isVoiceAsset(String asset) =>
-      asset.contains('st_') ||
-      asset.contains('seq_') ||
-      asset.contains('vox_') ||
-      asset.contains('cnt_') ||
-      asset.contains('c_') ||
-      asset.contains('preview_');
-
-  double _volumeFor(String asset) =>
-      _isVoiceAsset(asset) ? voiceVolume : sfxVolume;
-
-  Future<AudioPlayer> _ensure(String asset) {
-    final existing = _preparing[asset];
-    if (existing != null) return existing;
-
-    final player = AudioPlayer();
-    _players[asset] = player; // ← 첫 await 이전에 등록
-    final future = _preparePlayer(player, asset);
-    _preparing[asset] = future;
-    return future;
-  }
-
-  Future<AudioPlayer> _preparePlayer(AudioPlayer p, String asset) async {
-    try {
-      final ctx = _androidContext;
-      if (ctx != null) {
-        try {
-          await p
-              .setAudioContext(AudioContext(android: ctx))
-              .timeout(_opTimeout);
-        } catch (_) {}
-      }
-      await p.setReleaseMode(ReleaseMode.stop).timeout(_opTimeout);
-      await p.setVolume(_volumeFor(asset)).timeout(_opTimeout);
-      await p.setSource(AssetSource(asset)).timeout(_opTimeout);
-    } catch (e) {
-      if (kDebugMode) debugPrint('audio prepare failed($asset): $e');
-    }
-    return p;
-  }
-
-  void _applyVolumes() {
-    for (final e in _players.entries) {
-      e.value
-          .setVolume(_volumeFor(e.key))
-          .timeout(_opTimeout)
-          .catchError((_) {});
-    }
-  }
-
-  /// 자산별로 작업을 한 줄로 세운다 (같은 플레이어에 동시 명령 금지).
-  Future<void> _serial(String asset, Future<void> Function(AudioPlayer) op) {
-    final prev = _opChain[asset];
-    final completer = Completer<void>();
-    final mine = completer.future;
-    _opChain[asset] = mine;
-
-    Future<void> run() async {
-      if (prev != null) {
-        try {
-          await prev.timeout(_opTimeout);
-        } catch (_) {}
-      }
-      try {
-        final p = await _ensure(asset);
-        await op(p).timeout(_opTimeout);
-      } catch (e) {
-        if (kDebugMode) debugPrint('audio op failed($asset): $e');
-      } finally {
-        if (!completer.isCompleted) completer.complete();
-        if (identical(_opChain[asset], mine)) _opChain.remove(asset);
-      }
-    }
-
-    unawaited(run());
-    return mine;
-  }
-
-  /// 재생에 쓸 자산을 미리 준비한다 (첫 소리 지연 제거).
+  /// 첫 소리 지연을 줄이기 위한 준비. 채널은 이미 만들어져 있으므로
+  /// 여기서는 존재하는 파일만 확인한다.
   Future<void> warmUp() async {
     if (!_anySound) return;
     final assets = <String>{};
     assets.addAll(Sfx.values.map((s) => s.asset));
-    for (final key in _seqDurMs[voiceStyle.assetKey]!.keys) {
-      assets.add('audio/seq_${voiceStyle.assetKey}_$key.wav');
+    final map = seqDurMs[voiceStyle.assetKey];
+    if (map != null) {
+      for (final key in map.keys) {
+        assets.add('audio/seq_${voiceStyle.assetKey}_$key.wav');
+      }
     }
     assets.add('audio/cnt_${voiceStyle.assetKey}.wav');
-    await Future.wait(assets.map(_ensure));
+    // 실제 로딩은 재생 시점에 한다 (채널이 하나뿐이라 미리 걸어 둘 수 없다).
+    if (kDebugMode) debugPrint('warmUp: ${assets.length} assets ready');
   }
 
-  // ------------------------------------------------------------- 재생
-
-  void _log(String asset, _Role role, {String? phaseType}) {
+  void _log(String asset, String kind, {String? phaseType}) {
     if (!kDebugMode) return;
     playLog.add(
       PlayLogEntry(
         asset: asset,
         wallMs: DateTime.now().millisecondsSinceEpoch,
-        kind: role.name,
+        kind: kind,
         phaseType: phaseType,
       ),
     );
     if (playLog.length > 400) playLog.removeAt(0);
   }
 
-  /// 역할 재생 — 첫 await 이전에 슬롯을 점유한다.
-  ///
-  /// [startAtMs] 를 주면 파일의 그 지점부터 재생한다 (카운트다운 묶음에서
-  /// 앞 숫자를 건너뛸 때 사용).
-  Future<void> _playRole(
-    _Role role,
-    String asset,
-    int epoch, {
-    String? phaseType,
-    int startAtMs = 0,
-  }) async {
-    final seq = (_roleSeq[role] ?? 0) + 1;
-    _roleSeq[role] = seq;
-    final prevAsset = _current[role];
-    _current[role] = asset;
-    if (prevAsset != null && prevAsset != asset) {
-      unawaited(_serial(prevAsset, (p) => p.stop()));
-    }
-
-    bool stale() => epoch != _epoch || _roleSeq[role] != seq;
-
-    await _serial(asset, (p) async {
-      if (stale()) return;
-      await p.stop();
-      if (stale()) return;
-      await p.setVolume(_volumeFor(asset));
-      if (startAtMs > 0) {
-        await p.seek(Duration(milliseconds: startAtMs));
-      } else {
-        await p.seek(Duration.zero);
-      }
-      if (stale()) return;
-      await p.resume();
-      if (!stale()) _log(asset, role, phaseType: phaseType);
-    });
-  }
-
-  void _stopRole(_Role role) {
-    _roleSeq[role] = (_roleSeq[role] ?? 0) + 1;
-    final cur = _current.remove(role);
-    if (cur == null) return;
-    unawaited(_serial(cur, (p) => p.stop()));
-  }
-
   // ------------------------------------------------------------- 공개 API
 
   /// 구간 전환 안내.
   ///
-  /// 음성이 켜져 있으면 `seq_*.wav` 하나를 재생한다 (삑 + 음성이 이미 합쳐짐).
-  /// 음성이 꺼져 있으면 단독 주의음(삐-삐-)만 낸다.
+  /// 먼저 **진행 중인 모든 소리를 즉시 멈춘다** → 다음 구간으로 넘어갈 때
+  /// 이전 구간의 음성이 남아 겹치는 일이 없다.
   void announce(AnnouncePlan plan, {String? phaseType}) {
-    _epoch++;
-    for (final r in _Role.values) {
-      _stopRole(r);
-    }
+    _seq.stop();
+    _count.stop();
     if (!_anySound) return;
-    final epoch = _epoch;
 
     final hasVoice = voiceEnabled && plan.voices.isNotEmpty;
 
     if (!hasVoice) {
       final attention = sfxEnabled ? plan.sfx : null;
       if (attention == null) return;
-      unawaited(
-        _playRole(_Role.sfx, attention.asset, epoch, phaseType: phaseType),
-      );
+      _sfx.play(attention.asset, volume: sfxVolume);
+      _log(attention.asset, 'sfx', phaseType: phaseType);
       return;
     }
 
     // 파일 하나만 재생한다. 효과음을 껐으면 앞의 '삑' 구간을 건너뛴다.
     final asset = plan.seqAssetFor(voiceStyle);
     final startAt = sfxEnabled ? 0 : beepLeadMs + attentionGapMs;
-    unawaited(
-      _playRole(
-        _Role.seq,
-        asset,
-        epoch,
-        phaseType: phaseType,
-        startAtMs: startAt,
-      ),
-    );
+    _seq.play(asset, startAtMs: startAt, volume: voiceVolume);
+    _log(asset, 'seq', phaseType: phaseType);
   }
 
-  /// 마지막 5초 카운트다운 — 묶음 파일 하나를 [fromNumber] 초 지점부터 재생.
+  /// 마지막 5초 카운트다운 — 묶음 파일을 [fromNumber] 지점부터 한 번 재생.
   ///
-  /// 묶음 파일 안에서 숫자 사이 간격이 정확히 1초이므로, 초마다 파일을
-  /// 갈아 끼우던 예전 방식과 달리 간격이 흔들리지 않는다.
+  /// 파일 안에서 숫자 사이 간격이 정확히 1초이므로 흔들리지 않는다.
+  /// **안내 채널은 건드리지 않는다** (진행 중인 안내를 끊지 않기 위해).
   void playCountBundle({required int fromNumber}) {
-    if (!_anySound) return;
+    if (!_anySound || !voiceEnabled) return;
     final n = fromNumber.clamp(1, 5);
-    _epoch++; // 진행 중인 안내/카운트는 정리
-    for (final r in _Role.values) {
-      _stopRole(r);
-    }
-    final epoch = _epoch;
-
-    if (!voiceEnabled) {
-      // 음성이 꺼져 있으면 묶음 대신 매초 틱을 쓰므로 여기선 아무것도 안 함.
-      return;
-    }
-
     final offset = (5 - n) * 1000;
-    unawaited(
-      _playRole(
-        _Role.count,
-        'audio/cnt_${voiceStyle.assetKey}.wav',
-        epoch,
-        startAtMs: offset,
-      ),
-    );
+    final asset = 'audio/cnt_${voiceStyle.assetKey}.wav';
+    _count.play(asset, startAtMs: offset, volume: voiceVolume);
+    _log(asset, 'count@$n');
   }
 
-  /// 음성이 꺼진 상태의 1초 틱.
+  /// 단일 숫자 재생 (음성 꺼짐 → 틱 / 복귀 경로).
   void playCount(int n) {
     if (!_anySound) return;
     if (!voiceEnabled) {
       if (sfxEnabled) playSfx(Sfx.count);
       return;
     }
-    // 묶음 재생을 쓰지 않는 경로(백그라운드 복귀 등)를 위한 단일 숫자.
-    final epoch = _epoch;
-    unawaited(
-      _playRole(
-        _Role.count,
-        'audio/c_${voiceStyle.assetKey}_$n.wav',
-        epoch,
-      ),
-    );
+    final asset = 'audio/c_${voiceStyle.assetKey}_$n.wav';
+    _count.play(asset, volume: voiceVolume);
+    _log(asset, 'count');
   }
 
   /// 단발 효과음.
   void playSfx(Sfx sfx) {
     if (!_anySound || !sfxEnabled) return;
-    final epoch = _epoch;
-    unawaited(_playRole(_Role.sfx, sfx.asset, epoch));
+    _sfx.play(sfx.asset, volume: sfxVolume);
+    _log(sfx.asset, 'sfx');
   }
 
-  /// 설정 화면 '목소리 미리 듣기'.
-  ///
-  /// 실제 재생에 쓰는 **시퀀스 파일 그대로** 들려준다 → 미리 듣는 소리와
-  /// 실제 운동 중 소리가 어긋날 수 없다.
+  /// 설정 화면 '목소리 미리 듣기' — 실제 재생에 쓰는 시퀀스 파일 그대로.
   Future<void> previewVoice(VoiceStyle style) async {
+    _seq.stop();
+    _count.stop();
+    _preview.stop();
     if (!_anySound) return;
-    _epoch++;
-    for (final r in _Role.values) {
-      _stopRole(r);
-    }
-    final epoch = _epoch;
 
     final asset = 'audio/seq_${style.assetKey}_startWork.wav';
     final startAt = sfxEnabled ? 0 : beepLeadMs + attentionGapMs;
-    unawaited(
-      _playRole(_Role.preview, asset, epoch, startAtMs: startAt),
-    );
+    _preview.play(asset, startAtMs: startAt, volume: voiceVolume);
+    _log(asset, 'preview');
   }
 
   /// 설정 화면 '효과음 미리 듣기'.
   Future<void> previewSfx(Sfx sfx) async {
     if (!_anySound) return;
-    final epoch = _epoch;
-    await _playRole(_Role.preview, sfx.asset, epoch);
+    _preview.play(sfx.asset, volume: sfxVolume);
+    _log(sfx.asset, 'preview');
   }
 
-  /// 재생 중인 모든 소리를 즉시 무효화하고 멈춘다.
+  /// 재생 중인 모든 소리를 즉시 멈춘다 (일시정지/건너뛰기/종료).
   void cut() {
-    _epoch++;
-    for (final r in _Role.values) {
-      _stopRole(r);
-    }
+    _seq.stop();
+    _count.stop();
+    _sfx.stop();
+    _preview.stop();
   }
 
   Future<void> stopAll() async {
     cut();
-    for (final p in _players.values) {
-      try {
-        await p.stop().timeout(_opTimeout);
-      } catch (_) {}
-    }
   }
 
   void vibrate({bool heavy = false}) {
@@ -739,14 +622,11 @@ class AudioCoach {
   }
 
   Future<void> dispose() async {
-    cut();
-    for (final p in _players.values) {
-      try {
-        await p.dispose();
-      } catch (_) {}
-    }
-    _players.clear();
-    _preparing.clear();
-    _opChain.clear();
+    await Future.wait([
+      _seq.dispose(),
+      _count.dispose(),
+      _sfx.dispose(),
+      _preview.dispose(),
+    ]);
   }
 }

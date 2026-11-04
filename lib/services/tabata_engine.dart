@@ -435,13 +435,24 @@ class TabataEngine extends ChangeNotifier {
     //
     // 음성 안내를 껐을 때는 묶음 대신 매초 '틱'(sfx_count)을 그대로 쓴다.
     if (cur.hasCountdown) {
+      // 가장 **먼저** 울릴 숫자를 찾는다.
+      //
+      // 5 → 1 순으로 훑어 **처음** 조건을 만족하는 숫자에서 멈춘다.
+      // (n 이 클수록 구간 앞쪽이므로, 먼저 만족하는 n 이 곧 가장 앞 숫자다)
+      //
+      // [실기기 버그] 예전 코드는 `firstPlayable = n` 을 break 없이 대입해서
+      // 루프가 끝나면 항상 마지막 값인 1 이 남았다. 그러면 묶음 파일을
+      // 4초 지점(='하나')부터 재생해 **'1'만 들리고 5·4·3·2 는 무음**이 된다.
+      // (호준님 보고: "5·4·3·2·1 은 소리가 아예 들리지 않아 마지막 1만 들려")
+      // 반드시 첫 매치에서 break 해 '가장 큰' 숫자를 골라야 한다.
       int? firstPlayable;
       for (var n = 5; n >= 1; n--) {
         final atMs = durationMs - n * 1000;
         final delayMs = atMs - elapsed;
         if (atMs < _announceGuardMs) continue;
         if (delayMs < -250) continue;
-        firstPlayable = n;
+        firstPlayable = n; // ← 5,4,3... 순으로 내려오므로 첫 매치가 가장 앞 숫자
+        break;
       }
 
       for (var n = 5; n >= 1; n--) {

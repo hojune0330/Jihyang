@@ -23,8 +23,6 @@ import 'package:tabata_timer/services/tabata_engine.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  final audioDir = Directory('assets/audio');
-
   group('A. 안내 한 번 = 파일 하나', () {
     test('모든 구간의 안내가 단일 시퀀스 파일로 해석된다', () {
       for (final style in VoiceStyle.values) {
