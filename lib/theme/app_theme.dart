@@ -4,31 +4,52 @@ import 'package:flutter/material.dart';
 class AppColors {
   AppColors._();
 
-  // 배경 — 철저히 블랙
+  // 배경 — 순수 블랙
   static const Color background = Color(0xFF000000);
-  static const Color surface = Color(0xFF0E0E11);
-  static const Color surfaceHigh = Color(0xFF16161B);
-  static const Color stroke = Color(0xFF26262E);
+  static const Color surface = Color(0xFF121214);
+  static const Color surfaceHigh = Color(0xFF1C1C20);
+  static const Color stroke = Color(0xFF2C2C31);
 
-  // 시 / 분 / 초 — 각각 다른 색으로 강조
-  static const Color hours = Color(0xFF4FC3F7); // 시 : 시안 블루
-  static const Color minutes = Color(0xFFFFB547); // 분 : 앰버
-  static const Color seconds = Color(0xFFFF4D7D); // 초 : 핑크 레드
+  // 구간 색 — 진하게
+  static const Color work = Color(0xFFFF1744); // 운동 : 비비드 레드
+  static const Color rest = Color(0xFF2979FF); // 휴식 : 비비드 블루
+  static const Color prepare = Color(0xFFFFB300); // 준비 : 앰버
 
-  // 구간 색
-  static const Color work = Color(0xFF2EE6A8); // 운동 — 민트 그린
-  static const Color rest = Color(0xFF4FC3F7); // 휴식 — 블루
-  static const Color setRest = Color(0xFFB388FF); // 세트 휴식 — 퍼플
-  static const Color prepare = Color(0xFFFFB547); // 준비 — 앰버
+  // 시간 단위 색 — 구간 색 계열 안에서 서로 뚜렷이 구분되는 진한 색
+  static const Color hourColor = Color(0xFF00E5FF); // 시
+
+  // 운동(빨강 계열) 안에서 '분'과 '초'를 확실히 다르게
+  static const Color workMinute = Color(0xFFFF9100); // 운동 중 '분' : 비비드 오렌지
+  static const Color workSecond = Color(0xFFFF0059); // 운동 중 '초' : 비비드 크림슨
+  // 휴식(파랑 계열) 안에서 '분'과 '초'를 확실히 다르게
+  static const Color restMinute = Color(0xFF00E5FF); // 휴식 중 '분' : 비비드 시안
+  static const Color restSecond = Color(0xFF2B5BFF); // 휴식 중 '초' : 비비드 블루
+  static const Color setRestMinutesColor = Color(0xFFB388FF); // 세트 휴식
+  static const Color prepareMinute = Color(0xFFFFC400); // 준비 중 '분'
+  static const Color prepareSecond = Color(0xFFFF8F00); // 준비 중 '초'
 
   static const Color textPrimary = Color(0xFFF7F7FA);
-  static const Color textSecondary = Color(0xFF8E8E9A);
+  static const Color textSecondary = Color(0xFF9A9AA6);
 
   static Color forPhase(String type) => switch (type) {
     'work' => work,
     'rest' => rest,
-    'setRest' => setRest,
+    'setRest' => rest,
     _ => prepare,
+  };
+
+  static Color minuteFor(String type) => switch (type) {
+    'work' => workMinute,
+    'rest' => restMinute,
+    'setRest' => restMinute,
+    _ => prepareMinute,
+  };
+
+  static Color secondFor(String type) => switch (type) {
+    'work' => workSecond,
+    'rest' => restSecond,
+    'setRest' => restSecond,
+    _ => prepareSecond,
   };
 }
 
@@ -40,22 +61,10 @@ class AppTheme {
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.background,
       colorScheme: const ColorScheme.dark(
-        primary: AppColors.seconds,
-        secondary: AppColors.work,
+        primary: AppColors.work,
+        secondary: AppColors.rest,
         surface: AppColors.surface,
         onSurface: AppColors.textPrimary,
-      ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        titleTextStyle: TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 17,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.6,
-        ),
       ),
       splashFactory: InkSparkle.splashFactory,
       textTheme: base.textTheme.apply(

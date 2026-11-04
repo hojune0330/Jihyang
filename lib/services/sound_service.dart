@@ -65,12 +65,9 @@ class SoundService {
   }
 
   void vibrate({bool heavy = false}) {
-    try {
-      HapticFeedback.mediumImpact();
-      if (heavy) HapticFeedback.heavyImpact();
-    } catch (_) {
-      // 웹 등 미지원 플랫폼 무시
-    }
+    // 웹/테스트 등 미지원 플랫폼에서는 조용히 무시
+    HapticFeedback.mediumImpact().catchError((_) {});
+    if (heavy) HapticFeedback.heavyImpact().catchError((_) {});
   }
 
   Future<void> dispose() async {

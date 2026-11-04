@@ -4,57 +4,62 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// 시 / 분 / 초 를 각각 다른 색으로 강조한 대형 타이머
-class TimerDisplay extends StatelessWidget {
-  const TimerDisplay({
+/// 화면 중앙 대형 시간 표시.
+///
+/// 남은 시간(분:초)을 가장 크게 보여주고, 시가 있을 때만 앞에 붙인다.
+/// 각 단위는 구간 색 계열 안에서 서로 다른 진한 색으로 강조한다.
+class BigTimeDisplay extends StatelessWidget {
+  const BigTimeDisplay({
     super.key,
     required this.totalSeconds,
-    this.dimZeroHours = true,
-    this.fontSize = 66,
+    required this.phaseType,
+    required this.fontSize,
+    this.dimWhenZero = false,
   });
 
   final int totalSeconds;
-  final bool dimZeroHours;
+  final String phaseType;
   final double fontSize;
+  final bool dimWhenZero;
 
   @override
   Widget build(BuildContext context) {
     final clamped = totalSeconds < 0 ? 0 : totalSeconds;
-    final h = (clamped ~/ 3600).clamp(0, 99);
-    final m = ((clamped % 3600) ~/ 60).clamp(0, 59);
-    final s = (clamped % 60).clamp(0, 59);
+    final h = clamped ~/ 3600;
+    final m = (clamped % 3600) ~/ 60;
+    final s = clamped % 60;
 
-    final hoursOpacity = (dimZeroHours && h == 0) ? 0.34 : 1.0;
+    final minuteColor = AppColors.minuteFor(phaseType);
+    final secondColor = AppColors.secondFor(phaseType);
+    final dim = dimWhenZero ? 0.55 : 1.0;
 
     return FittedBox(
       fit: BoxFit.scaleDown,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
         children: [
-          _Unit(
-            value: h.toString().padLeft(2, '0'),
-            label: '시',
-            color: AppColors.hours,
-            fontSize: fontSize,
-            opacity: hoursOpacity,
-          ),
-          _Colon(
-            color: AppColors.hours,
-            fontSize: fontSize,
-            opacity: hoursOpacity,
-          ),
-          _Unit(
-            value: m.toString().padLeft(2, '0'),
-            label: '분',
-            color: AppColors.minutes,
+          if (h > 0) ...[
+            _Num(
+              text: h.toString(),
+              color: AppColors.hourColor,
+              fontSize: fontSize * 0.62,
+            ),
+            _Sep(color: AppColors.hourColor, fontSize: fontSize * 0.62),
+          ],
+          _Num(
+            text: m.toString().padLeft(2, '0'),
+            color: minuteColor.withValues(alpha: dim),
             fontSize: fontSize,
           ),
-          _Colon(color: AppColors.minutes, fontSize: fontSize),
-          _Unit(
-            value: s.toString().padLeft(2, '0'),
-            label: '초',
-            color: AppColors.seconds,
+          _Sep(
+            color: minuteColor.withValues(alpha: dim),
+            fontSize: fontSize,
+          ),
+          _Num(
+            text: s.toString().padLeft(2, '0'),
+            color: secondColor.withValues(alpha: dim),
             fontSize: fontSize,
           ),
         ],
@@ -63,109 +68,68 @@ class TimerDisplay extends StatelessWidget {
   }
 }
 
-class _Colon extends StatelessWidget {
-  const _Colon({
-    required this.color,
-    required this.fontSize,
-    this.opacity = 1.0,
-  });
+class _Sep extends StatelessWidget {
+  const _Sep({required this.color, required this.fontSize});
 
   final Color color;
   final double fontSize;
-  final double opacity;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: fontSize * 0.30),
+      padding: EdgeInsets.symmetric(horizontal: fontSize * 0.04),
       child: Text(
         ':',
         style: TextStyle(
-          fontSize: fontSize * 0.72,
+          fontSize: fontSize * 0.78,
           height: 1,
-          fontWeight: FontWeight.w300,
-          color: color.withValues(alpha: 0.42 * opacity),
+          fontWeight: FontWeight.w800,
+          color: color.withValues(alpha: 0.5),
         ),
       ),
     );
   }
 }
 
-class _Unit extends StatelessWidget {
-  const _Unit({
-    required this.value,
-    required this.label,
-    required this.color,
-    required this.fontSize,
-    this.opacity = 1.0,
-  });
+class _Num extends StatelessWidget {
+  const _Num({required this.text, required this.color, required this.fontSize});
 
-  final String value;
-  final String label;
+  final String text;
   final Color color;
   final double fontSize;
-  final double opacity;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    final style = TextStyle(
+      fontSize: fontSize,
+      height: 1,
+      fontWeight: FontWeight.w900,
+      letterSpacing: -3,
+      color: color,
+      fontFeatures: const [ui.FontFeature.tabularFigures()],
+    );
+
+    return Stack(
+      alignment: Alignment.center,
       children: [
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            // 숫자 뒤 은은한 발광
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: fontSize,
-                height: 1.0,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -1,
-                color: color.withValues(alpha: 0.28 * opacity),
-                shadows: [
-                  Shadow(
-                    color: color.withValues(alpha: 0.55 * opacity),
-                    blurRadius: fontSize * 0.42,
-                  ),
-                ],
+        // 진한 네온 글로우
+        Text(
+          text,
+          style: style.copyWith(
+            color: color.withValues(alpha: 0.55),
+            shadows: [
+              Shadow(
+                color: color.withValues(alpha: 0.9),
+                blurRadius: fontSize * 0.30,
               ),
-            ),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: fontSize,
-                height: 1.0,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -1,
-                color: color.withValues(alpha: opacity),
-                fontFeatures: const [ui.FontFeature.tabularFigures()],
+              Shadow(
+                color: color.withValues(alpha: 0.6),
+                blurRadius: fontSize * 0.70,
               ),
-            ),
-          ],
-        ),
-        SizedBox(height: fontSize * 0.13),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.10 * opacity),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: color.withValues(alpha: 0.26 * opacity),
-              width: 0.8,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: (fontSize * 0.17).clamp(9.0, 14.0),
-              height: 1.1,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.2,
-              color: color.withValues(alpha: 0.92 * opacity),
-            ),
+            ],
           ),
         ),
+        Text(text, style: style),
       ],
     );
   }
