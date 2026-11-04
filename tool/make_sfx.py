@@ -1,150 +1,86 @@
 #!/usr/bin/env python3
-"""타바타 타이머 효과음 생성 (v3 — 명확한 경고음, 피로감 없는 톤).
+"""짧고 선명한 단일 전자음(ATM 버튼음 계열) 효과음 생성기.
 
-설계
-- 사인파 기반 + 완만한 어택/릴리즈 → 날카로운 클릭음 없음
-- 배음은 2차만 약하게 → 금속성/삐- 소리 대신 부드러운 종소리 느낌
-- 길이 0.35~0.75초 → 운동 중에도 확실히 인지, 그러나 길지 않게
-- 각 상태는 '음정 진행 방향'으로 구분
-    start_work  : 상승 3음 (올라감 = 시작/힘)
-    start_rest  : 하강 3음 (내려감 = 이완)
-    set_start   : 이중 펄스 상승 (반복 리듬 = 새 세트)
-    finish      : 4음 아르페지오 + 긴 마지막 (완료)
+설계 원칙 (요구사항 ④)
+  - 짧고 선명한 **단일** 신호음. 반복음·긴 감미료 금지.
+  - 운동/휴식은 **음높이**로 명확히 구분 (높음=운동, 낮음=휴식).
+  - 주변 소음 속에서도 인식 가능하도록 배음(2·3차)을 살짝 섞어
+    '전자음' 특유의 또렷함을 준다.
+  - 지나치게 날카롭지 않도록 2kHz 이상 성분은 최소화하고,
+    4ms 어택 + 지수 감쇠로 귀를 찌르지 않게 만든다.
+
+출력: assets/audio/sfx_work.wav, sfx_rest.wav, sfx_finish.wav, beep.wav
 """
-import math
-import struct
 import wave
+import struct
+import numpy as np
+import os
 
 SR = 44100
-BASE = "/home/user/flutter_app/assets/audio"
+OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'audio')
 
 
-def env(n, attack=0.014, release=0.16, hold=0.70):
-    """부드러운 엔벨로프. attack/release 는 초 단위."""
-    a = max(1, int(SR * attack))
-    r = max(1, int(SR * release))
-    out = [0.0] * n
-    for i in range(n):
-        if i < a:
-            v = i / a
-        elif i > n - r:
-            v = max(0.0, (n - i) / r)
-        else:
-            v = 1.0
-        # smoothstep
-        out[i] = v * v * (3 - 2 * v) * hold
-    return out
-
-
-def tone(freq, dur, amp=0.5, attack=0.014, release=0.16):
+def tone(freq, dur, harm=((1, 1.0), (2, 0.16), (3, 0.05)), attack=0.004,
+         decay=40.0):
+    """지수 감쇠하는 짧은 전자음 1개."""
     n = int(SR * dur)
-    e = env(n, attack=attack, release=release)
-    buf = [0.0] * n
-    w = 2 * math.pi * freq
-    for i in range(n):
-        t = i / SR
-        v = math.sin(w * t) + 0.22 * math.sin(2 * w * t) + 0.05 * math.sin(3 * w * t)
-        buf[i] = amp * v * e[i] / 1.27
-    return buf
+    t = np.arange(n) / SR
+    w = np.zeros(n)
+    for h, a in harm:
+        if freq * h > 2000:      # 2kHz 이상은 넣지 않는다 (날카로움 방지)
+            continue
+        w += a * np.sin(2 * np.pi * freq * h * t)
+
+    env = np.exp(-t * decay)
+    a_n = max(1, int(SR * attack))
+    env[:a_n] *= np.linspace(0.0, 1.0, a_n)
+    tail = max(1, int(SR * 0.008))
+    env[-tail:] *= np.linspace(1.0, 0.0, tail)
+    w *= env
+
+    peak = np.max(np.abs(w))
+    if peak > 0:
+        w /= peak
+    return w
 
 
 def silence(dur):
-    return [0.0] * int(SR * dur)
+    return np.zeros(max(1, int(SR * dur)))
 
 
-def seq(*parts):
-    out = []
-    for p in parts:
-        out.extend(p)
-    return out
+def write_wav(name, data, peak=0.90):
+    data = np.asarray(data, dtype=np.float64)
+    m = np.max(np.abs(data))
+    if m > 0:
+        data = data / m * peak
+    pcm = np.clip(data * 32767.0, -32768, 32767).astype('<i2')
+    path = os.path.join(OUT, name)
+    with wave.open(path, 'wb') as f:
+        f.setnchannels(1)
+        f.setsampwidth(2)
+        f.setframerate(SR)
+        f.writeframes(pcm.tobytes())
+    dur = len(pcm) / SR
+    print(f'{name:18s} {dur*1000:6.1f} ms  peak={peak}')
 
 
-def write(name, samples, target=0.97):
-    peak = max((abs(s) for s in samples), default=1.0)
-    # 항상 목표 피크까지 정규화 → 기기에서 충분히 크게 들린다
-    g = target / peak if peak > 1e-6 else 1.0
-    with wave.open(f"{BASE}/{name}", "w") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(SR)
-        w.writeframes(
-            b"".join(
-                struct.pack("<h", int(max(-1.0, min(1.0, s * g)) * 32767))
-                for s in samples
-            )
-        )
-    print(f"  {name:20} {len(samples)/SR:.2f}s")
+def main():
+    # 운동 시작 — 높고 또렷한 단일 전자음 (A5 880Hz 계열의 1180Hz)
+    write_wav('sfx_work.wav', tone(1180, 0.095), peak=0.92)
+
+    # 휴식 시작 — 낮고 부드러운 단일 전자음 (E4 660Hz)
+    write_wav('sfx_rest.wav', tone(660, 0.110, decay=32.0), peak=0.92)
+
+    # 전체 종료 — 짧은 2음 상승 (780 -> 1170Hz). 반복음 아님, 총 170ms
+    write_wav(
+        'sfx_finish.wav',
+        np.concatenate([tone(780, 0.075), silence(0.012), tone(1170, 0.080)]),
+        peak=0.92,
+    )
+
+    # 음성 대체용 중립 비프
+    write_wav('beep.wav', tone(900, 0.080), peak=0.85)
 
 
-print("효과음 생성:")
-
-# 운동 시작 / 다음 라운드 시작 : 상승 3음 (A5 → D6 → G6)
-write(
-    "start_work.wav",
-    seq(
-        tone(880, 0.085, 0.46, release=0.06),
-        silence(0.018),
-        tone(1175, 0.085, 0.50, release=0.06),
-        silence(0.018),
-        tone(1568, 0.24, 0.54, attack=0.010, release=0.20),
-    ),
-)
-
-# 휴식 시작 : 하강 3음 (G5 → D5 → A4) — 운동 시작과 방향이 반대
-write(
-    "start_rest.wav",
-    seq(
-        tone(784, 0.095, 0.44, release=0.07),
-        silence(0.020),
-        tone(587, 0.095, 0.46, release=0.07),
-        silence(0.020),
-        tone(440, 0.30, 0.50, attack=0.016, release=0.24),
-    ),
-)
-
-# 세트 시작 : 이중 펄스 + 상승 (반복 리듬으로 '새 세트' 느낌)
-write(
-    "set_start.wav",
-    seq(
-        tone(988, 0.070, 0.44, release=0.05),
-        silence(0.045),
-        tone(988, 0.070, 0.44, release=0.05),
-        silence(0.045),
-        tone(1319, 0.115, 0.48, release=0.08),
-        silence(0.015),
-        tone(1760, 0.26, 0.52, attack=0.010, release=0.21),
-    ),
-)
-
-# 세트 간 휴식 시작 : 하강 3음 + 낮고 긴 마무리 (일반 휴식과 구분)
-write(
-    "set_rest.wav",
-    seq(
-        tone(698, 0.090, 0.42, release=0.06),
-        silence(0.020),
-        tone(587, 0.090, 0.44, release=0.06),
-        silence(0.020),
-        tone(466, 0.090, 0.44, release=0.06),
-        silence(0.020),
-        tone(349, 0.34, 0.48, attack=0.018, release=0.26),
-    ),
-)
-
-# 운동 종료 : 4음 상승 아르페지오 + 긴 마지막 (완료감)
-write(
-    "finish.wav",
-    seq(
-        tone(523, 0.10, 0.42, release=0.07),
-        silence(0.014),
-        tone(659, 0.10, 0.45, release=0.07),
-        silence(0.014),
-        tone(784, 0.10, 0.48, release=0.07),
-        silence(0.014),
-        tone(1046, 0.46, 0.54, attack=0.012, release=0.36),
-    ),
-)
-
-# 짧은 중립 비프 (효과음만 켜고 음성을 껐을 때 카운트 대체)
-write("beep.wav", seq(tone(1046, 0.055, 0.38, release=0.045), silence(0.008)))
-
-print("완료")
+if __name__ == '__main__':
+    main()

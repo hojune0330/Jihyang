@@ -1,9 +1,9 @@
 import 'phase.dart';
 
-/// 카운트다운 음성 종류
+/// 카운트다운 · 상태 안내 음성 종류
 enum VoiceStyle {
   male('남성', '또렷하고 안정적인 코치 목소리'),
-  female('여성', '밝고 경쾌한 에너지 넘치는 목소리'),
+  female('여성 40·50대', '차분하고 낮은 톤의 선생님 목소리'),
   cute('캐릭터', '명랑하고 귀여운 캐릭터 목소리');
 
   const VoiceStyle(this.label, this.description);

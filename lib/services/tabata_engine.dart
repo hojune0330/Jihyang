@@ -89,9 +89,15 @@ class TabataEngine extends ChangeNotifier {
   /// 이 구간에서 이미 안내한 카운트다운 숫자
   final Set<int> _announced = <int>{};
 
-  /// 구간 시작 후 이 시간(ms) 안에 울릴 카운트다운 숫자는 생략한다.
-  /// 전환 효과음(최장 0.67초)과 겹쳐 알아듣기 어려워지는 것을 막는다.
-  static const int _minCountOffsetMs = 700;
+  /// 현재 구간에 울릴 안내 계획 (효과음 + 상태 음성).
+
+  /// 구간 시작 안내(효과음+음성)가 끝날 때까지의 시간(ms).
+  ///
+  /// 이 시간보다 이른 카운트다운 숫자는 **시작 안내와 겹친다**고 보고 생략한다.
+  /// "마지막 1초와 다음 구간 시작 음성이 겹치지 않게" 하는 장치의 앞쪽 절반이다.
+  /// (뒤쪽 절반: 카운트다운 '1'은 구간 종료 1초 전에 울리고, 다음 구간 안내는
+  /// 종료 시각에 울리므로 최소 350ms 간격이 확보된다)
+  int _announceGuardMs = 0;
 
   // 스케줄러
   final List<Timer> _eventTimers = <Timer>[];
@@ -248,7 +254,7 @@ class TabataEngine extends ChangeNotifier {
     _status = EngineStatus.idle;
     _rebuild();
     _applyAudioSettings();
-    AudioCoach.instance.stopAll();
+    AudioCoach.instance.cut();
     notifyListeners();
   }
 
@@ -288,8 +294,8 @@ class TabataEngine extends ChangeNotifier {
 
     _stopUiTicker();
     _cancelEventTimers();
-    // 카운트다운 음성이 즉시 끊겨야 한다.
-    unawaited(AudioCoach.instance.stopAll());
+    // 재생 중이던 카운트다운/안내 음성을 **동기적으로** 무효화한다.
+    AudioCoach.instance.cut();
 
     notifyListeners();
   }
@@ -301,6 +307,8 @@ class TabataEngine extends ChangeNotifier {
     _phaseStartWall = DateTime.now().subtract(
       Duration(milliseconds: _pausedElapsedMs),
     );
+    // 재개 시점부터 카운트다운 예약을 새로 건다 (지난 숫자는 재생하지 않는다).
+    AudioCoach.instance.cut();
     _startUiTicker();
     _scheduleEvents();
     notifyListeners();
@@ -323,8 +331,8 @@ class TabataEngine extends ChangeNotifier {
     if (_status != EngineStatus.running && _status != EngineStatus.paused) {
       return;
     }
-    unawaited(AudioCoach.instance.stopAll());
-    // 건너뛰기로 들어간 구간도 '전환 순간'이므로 시작 효과음은 울린다.
+    AudioCoach.instance.cut();
+    // 건너뛰기로 들어간 구간도 '전환 순간'이므로 시작 안내는 울린다.
     // (일시정지 상태에서 건너뛰면 소리는 내지 않는다)
     _advanceFrom(
       elapsedMs: elapsedInPhaseMs,
@@ -373,6 +381,8 @@ class TabataEngine extends ChangeNotifier {
       t.cancel();
     }
     _eventTimers.clear();
+    // 이미 발화 대기 중이던 예약을 무효화한다.
+    _scheduleEpoch++;
   }
 
   void _cancelTimers() {
@@ -397,6 +407,15 @@ class TabataEngine extends ChangeNotifier {
   }
 
   /// 현재 구간에 필요한 사운드 이벤트를 절대 시각 기준으로 예약한다.
+  ///
+  /// 이벤트 순서 규칙 (겹침 방지의 핵심)
+  /// ------------------------------------
+  ///   ① 구간 시작 T+0        : 효과음 → 상태 안내 음성 ([_enterPhase])
+  ///   ② 마지막 5초 T-5s..T-1s: 카운트다운 숫자 (시작 안내와 겹치면 생략)
+  ///   ③ 구간 종료 T+0        : [_reconcile] → [_advanceFrom] → 다음 구간 ①
+  ///
+  /// '1'은 T-1s 에 0.65초 이하로 끝나고, 다음 구간 안내는 T+0 에 시작하므로
+  /// **최소 350ms 간격**이 항상 확보된다.
   void _scheduleEvents() {
     _cancelEventTimers();
     if (_status != EngineStatus.running) return;
@@ -407,15 +426,16 @@ class TabataEngine extends ChangeNotifier {
     final durationMs = cur.duration * 1000;
     final elapsed = elapsedInPhaseMs;
 
-    // --- 마지막 5초 카운트다운 ---------------------------------
+    // --- 마지막 5초 카운트다운 (모든 시간 구간) -----------------
     if (cur.hasCountdown) {
       for (var n = 5; n >= 1; n--) {
         if (_announced.contains(n)) continue;
         final atMs = durationMs - n * 1000;
         final delayMs = atMs - elapsed;
-        // 구간 시작 700ms 이내에 울릴 숫자는 전환 효과음과 겹친다.
-        // (예: 4초 운동 → 4는 생략, 3·2·1만 안내) → 소리가 뭉개지지 않는다.
-        if (atMs < _minCountOffsetMs) {
+
+        // 구간 시작 안내(효과음+음성)와 겹치는 숫자는 생략한다.
+        // 예) 5초 운동 + 남성 목소리 → 안내 약 1.3초 → 5·4·3 생략, 2·1 안내
+        if (atMs < _announceGuardMs) {
           _announced.add(n);
           continue;
         }
@@ -429,7 +449,8 @@ class TabataEngine extends ChangeNotifier {
           delayMs < 0 ? 0 : delayMs,
           label: 'count$n',
           onFire: () {
-            if (_status != EngineStatus.running || _disposed) return;
+            if (_disposed) return;
+            if (_status != EngineStatus.running) return;
             if (currentPhase != cur) return;
             if (_announced.contains(n)) return;
             _announced.add(n);
@@ -446,21 +467,30 @@ class TabataEngine extends ChangeNotifier {
       endDelay < 0 ? 0 : endDelay,
       label: 'end',
       onFire: () {
-        if (_status != EngineStatus.running || _disposed) return;
+        if (_disposed) return;
+        if (_status != EngineStatus.running) return;
         _reconcile();
       },
     );
   }
 
   /// 벽시계 검증이 포함된 정확 예약.
+  ///
+  /// [_scheduleEpoch] 를 함께 기억해 두었다가, 발화 시점에 값이 달라졌으면
+  /// (구간 전환 / 일시정지 / 재개) 그 예약은 **폐기**한다.
+  /// 타이머 취소가 늦게 반영되거나 재예약과 겹쳐도 이벤트가 중복 발화하지 않는다.
+  int _scheduleEpoch = 0;
+
   void _scheduleAt(
     DateTime target,
     int delayMs, {
     required String label,
     required VoidCallback onFire,
   }) {
+    final epoch = _scheduleEpoch;
     final t = Timer(Duration(milliseconds: delayMs < 0 ? 0 : delayMs), () {
       if (_disposed) return;
+      if (epoch != _scheduleEpoch) return; // 폐기된 예약
       final now = DateTime.now();
       // 너무 일찍 깨어났으면 남은 시간만큼 다시 예약 (드리프트 보정)
       final delta = target.difference(now).inMilliseconds;
@@ -492,13 +522,27 @@ class TabataEngine extends ChangeNotifier {
       if (elapsed < durationMs) {
         return;
       }
-      _advanceFrom(elapsedMs: elapsed);
+      // 백그라운드에서 여러 구간이 밀렸다면 **마지막 구간에서만** 안내한다.
+      // (밀린 구간의 음성을 몰아서 재생하는 것을 막는다)
+      final carry = elapsed - durationMs;
+      final nextIdx = _index + 1;
+      final isLastAdvance =
+          nextIdx >= _phases.length ||
+          carry < _phases[nextIdx].duration * 1000;
+      _advanceFrom(elapsedMs: elapsed, announce: isLastAdvance);
       if (_status != EngineStatus.running) return;
     }
   }
 
   /// 현재 구간에서 경과한 시간을 반영해 다음 구간으로 넘어간다.
-  void _advanceFrom({required int elapsedMs, bool announce = true}) {
+  ///
+  /// [announce] 는 기본적으로 '실제 시간이 흘러' 넘어갈 때만 true 다.
+  /// 백그라운드에서 여러 구간을 한꺼번에 따라잡을 때는 마지막 구간만 안내해
+  /// 음성이 몰아서 재생되는 일을 막는다.
+  void _advanceFrom({
+    required int elapsedMs,
+    bool announce = true,
+  }) {
     final prev = currentPhase;
     if (prev == null) return;
 
@@ -535,20 +579,39 @@ class TabataEngine extends ChangeNotifier {
     if (phase == null) return;
     _recordOnEnter(phase);
     _applyAudioSettings();
-    // 구간 → 효과음 매핑은 순수 함수 한 곳에서만 결정한다.
+
+    // 구간 → 안내 계획은 순수 함수 한 곳에서만 결정한다.
     // (재생 여부와 무관하게 '어떤 소리가 선택됐는지'는 항상 기록 → 검증 가능)
-    final sfx = sfxForPhase(phase);
-    _lastPhaseSfx = sfx;
+    final plan = planForPhase(
+      phase,
+      totalSets: _config.sets,
+      totalRounds: _config.rounds,
+    );
+    _lastPhasePlan = plan;
+    _lastPhaseSfx = plan.sfx;
+    _announceGuardMs = announceGuardMs(
+      plan,
+      _config.voiceStyle,
+      sfxEnabled: _config.sfxEnabled,
+      voiceEnabled: _config.voiceEnabled,
+    );
+
     if (!audioOutputEnabled) return;
 
-    final coach = AudioCoach.instance;
-    if (sfx != null) coach.playSfx(sfx);
-    if (phase.type == PhaseType.work) coach.vibrate();
+    AudioCoach.instance.announce(plan, phaseType: phase.type.name);
+    if (phase.type == PhaseType.work) AudioCoach.instance.vibrate();
   }
 
   /// (검증용) 마지막으로 예약한 구간 전환 효과음
   Sfx? get lastPhaseSfx => _lastPhaseSfx;
   Sfx? _lastPhaseSfx;
+
+  /// (검증용) 마지막으로 예약한 구간 안내 계획
+  AnnouncePlan get lastPhasePlan => _lastPhasePlan;
+  AnnouncePlan _lastPhasePlan = const AnnouncePlan();
+
+  /// (검증용) 현재 구간의 카운트다운 보호 구간(ms)
+  int get announceGuard => _announceGuardMs;
 
   void _recordOnEnter(Phase phase) {
     if (!kDebugMode) return;
@@ -573,7 +636,14 @@ class TabataEngine extends ChangeNotifier {
     _completedSets = _config.sets;
     _completedRounds = _config.sets * _config.rounds;
     if (audioOutputEnabled) {
-      AudioCoach.instance.playSfx(Sfx.finish);
+      // 종료도 '구간 전환'과 동일한 순서(효과음 → 음성)로 안내한다.
+      AudioCoach.instance.announce(
+        const AnnouncePlan(
+          sfx: Sfx.finish,
+          voices: [StateVoice.finish],
+        ),
+        phaseType: 'finished',
+      );
     }
     notifyListeners();
   }

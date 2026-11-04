@@ -6,11 +6,15 @@ import '../utils/fmt.dart';
 
 /// 화면 1 — 운동 시작 전 메인 화면
 ///
-/// 정보 위계
+/// 정보 위계 (모두 '독립된 영역'으로 분리)
 ///  ① 운동 시간 / 휴식 시간 — 가장 큰 카드 (핵심)
-///  ② 라운드 / 세트 / 세트 간 휴식 — 각각 독립된 카드
-///  ③ 총 소요 시간 — 준비시간 포함, 실제 타이머와 동일한 계산
-///  ④ 운동 기록 진입 / 설정 진입
+///  ② 라운드 / 세트 — 큰 숫자 카드
+///  ③ 세트 간 휴식 — 조건부 카드 (세트 1개면 안내 문구로 대체)
+///  ④ 총 소요 시간 — 준비시간 포함, 실제 타이머와 동일한 계산
+///  ⑤ 큰 시작 버튼
+///
+/// 각 영역은 카드로 분리되어 있고, 라벨 → 값 → 보조설명 순서로 크기가
+/// 명확히 구분된다. 작은 글씨 나열은 하지 않는다.
 class ReadyScreen extends StatelessWidget {
   const ReadyScreen({
     super.key,
@@ -43,17 +47,17 @@ class ReadyScreen extends StatelessWidget {
               child: LayoutBuilder(
                 builder: (context, box) {
                   return SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(20, 2, 20, 4),
+                    padding: const EdgeInsets.fromLTRB(18, 6, 18, 6),
                     child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: box.maxHeight - 6),
+                      constraints: BoxConstraints(minHeight: box.maxHeight - 12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           if (hasSavedSession) _resumeBanner(),
                           _timeCards(),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 12),
                           _countCards(),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 12),
                           _totalCard(),
                         ],
                       ),
@@ -73,7 +77,7 @@ class ReadyScreen extends StatelessWidget {
 
   Widget _topBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 10, 2),
+      padding: const EdgeInsets.fromLTRB(20, 10, 10, 6),
       child: Row(
         children: [
           const Flexible(
@@ -83,9 +87,9 @@ class ReadyScreen extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: AppColors.textPrimary,
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.2,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.3,
               ),
             ),
           ),
@@ -132,37 +136,37 @@ class ReadyScreen extends StatelessWidget {
 
   Widget _resumeBanner() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: InkWell(
         onTap: onResumeSession,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
           decoration: BoxDecoration(
             color: AppColors.surfaceHigh,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
             children: [
               const Icon(
                 Icons.play_circle_outline,
-                size: 19,
+                size: 20,
                 color: AppColors.prepare,
               ),
-              const SizedBox(width: 9),
+              const SizedBox(width: 10),
               const Expanded(
                 child: Text(
                   '진행 중이던 운동 이어서 하기',
                   style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
                   ),
                 ),
               ),
               const Icon(
                 Icons.chevron_right,
-                size: 19,
+                size: 20,
                 color: AppColors.textTertiary,
               ),
             ],
@@ -181,20 +185,20 @@ class ReadyScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            flex: 58,
+            flex: 55,
             child: _BigTimeCard(
               label: '운동 시간',
-              value: _mmss(config.workSeconds),
+              value: fmtClock(config.workSeconds),
               hint: '한 라운드',
               accent: AppColors.work,
             ),
           ),
-          const SizedBox(width: 11),
+          const SizedBox(width: 12),
           Expanded(
-            flex: 42,
+            flex: 45,
             child: _BigTimeCard(
               label: '휴식 시간',
-              value: hasRest ? _mmss(config.restSeconds) : '없음',
+              value: hasRest ? fmtClock(config.restSeconds) : '없음',
               hint: hasRest ? '라운드 사이' : '휴식 없이 진행',
               accent: AppColors.rest,
               muted: !hasRest,
@@ -205,7 +209,7 @@ class ReadyScreen extends StatelessWidget {
     );
   }
 
-  // ---------------------------------- ② 라운드 / 세트 / 세트 간 휴식
+  // ------------------------------------------- ② 라운드 / 세트 / 세트 간 휴식
 
   Widget _countCards() {
     final showSetRest = config.sets > 1;
@@ -221,7 +225,7 @@ class ReadyScreen extends StatelessWidget {
               accent: AppColors.prepare,
             ),
           ),
-          const SizedBox(width: 9),
+          const SizedBox(width: 12),
           Expanded(
             child: _StatCard(
               label: '세트',
@@ -230,7 +234,7 @@ class ReadyScreen extends StatelessWidget {
               accent: AppColors.textPrimary,
             ),
           ),
-          const SizedBox(width: 9),
+          const SizedBox(width: 12),
           Expanded(
             child: _StatCard(
               label: '세트 간 휴식',
@@ -249,35 +253,36 @@ class ReadyScreen extends StatelessWidget {
 
   Widget _totalCard() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 13, 16, 14),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.divider, width: 1),
       ),
       child: Column(
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Column(
+              const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
+                  Text(
                     '총 소요 시간',
                     style: TextStyle(
                       color: AppColors.textPrimary,
-                      fontSize: 14,
+                      fontSize: 14.5,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  SizedBox(height: 3),
                   Text(
-                    '준비 ${TabataConfig.prepareSeconds}초 포함 · '
-                    '총 ${config.totalRounds}라운드',
-                    style: const TextStyle(
+                    '준비 ${TabataConfig.prepareSeconds}초 포함',
+                    style: TextStyle(
                       color: AppColors.textTertiary,
                       fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -292,10 +297,10 @@ class ReadyScreen extends StatelessWidget {
                     maxLines: 1,
                     style: const TextStyle(
                       color: AppColors.textPrimary,
-                      fontSize: 23,
+                      fontSize: 26,
                       height: 1.0,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: -0.6,
+                      letterSpacing: -0.8,
                       fontFeatures: [FontFeature.tabularFigures()],
                     ),
                   ),
@@ -303,12 +308,12 @@ class ReadyScreen extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 11),
-          // 운동 / 휴식 비중을 한 줄로 보여 준다
+          const SizedBox(height: 14),
+          // 운동 / 휴식 비중
           ClipRRect(
-            borderRadius: BorderRadius.circular(3),
+            borderRadius: BorderRadius.circular(4),
             child: SizedBox(
-              height: 5,
+              height: 6,
               child: Row(
                 children: [
                   Expanded(
@@ -336,17 +341,22 @@ class ReadyScreen extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 9),
+          const SizedBox(height: 11),
           Row(
             children: [
-              _legend(
-                AppColors.work,
-                '운동 ${fmtKorean(config.pureWorkSeconds)}',
+              Flexible(
+                child: _legend(
+                  AppColors.work,
+                  '운동 ${fmtKorean(config.pureWorkSeconds)} · '
+                      '총 ${config.totalRounds}라운드',
+                ),
               ),
-              const SizedBox(width: 14),
-              _legend(
-                AppColors.rest,
-                '휴식 ${fmtKorean(config.totalSeconds - config.pureWorkSeconds)}',
+              const SizedBox(width: 10),
+              Flexible(
+                child: _legend(
+                  AppColors.rest,
+                  '휴식 ${fmtKorean(config.totalSeconds - config.pureWorkSeconds)}',
+                ),
               ),
             ],
           ),
@@ -365,12 +375,16 @@ class ReadyScreen extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
-        Text(
-          text,
-          style: const TextStyle(
-            color: AppColors.textTertiary,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.textTertiary,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ],
@@ -381,9 +395,9 @@ class ReadyScreen extends StatelessWidget {
 
   Widget _startArea() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
       child: SizedBox(
-        height: 66,
+        height: 72,
         width: double.infinity,
         child: FilledButton(
           onPressed: onStart,
@@ -391,20 +405,21 @@ class ReadyScreen extends StatelessWidget {
             backgroundColor: AppColors.work,
             foregroundColor: AppColors.ink,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(17),
             ),
+            elevation: 0,
           ),
           child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.play_arrow_rounded, size: 29, color: AppColors.ink),
-              SizedBox(width: 5),
+              Icon(Icons.play_arrow_rounded, size: 32, color: AppColors.ink),
+              SizedBox(width: 6),
               Text(
                 '운동 시작',
                 style: TextStyle(
-                  fontSize: 19,
+                  fontSize: 21,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: -0.3,
+                  letterSpacing: -0.4,
                   color: AppColors.ink,
                 ),
               ),
@@ -416,8 +431,6 @@ class ReadyScreen extends StatelessWidget {
   }
 
   // -------------------------------------------------- 포맷
-
-  String _mmss(int seconds) => fmtClock(seconds);
 
   String _compact(int seconds) {
     if (seconds <= 0) return '없음';
@@ -449,15 +462,15 @@ class _BigTimeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final effective = muted ? AppColors.textTertiary : accent;
     return Container(
-      padding: const EdgeInsets.fromLTRB(15, 13, 15, 15),
+      padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
       decoration: BoxDecoration(
         color: muted
             ? AppColors.surface
-            : AppColors.tinted(accent).withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(16),
+            : AppColors.tinted(accent).withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: muted ? AppColors.divider : accent.withValues(alpha: 0.45),
-          width: 1.3,
+          color: muted ? AppColors.divider : accent.withValues(alpha: 0.5),
+          width: 1.4,
         ),
       ),
       child: Column(
@@ -466,14 +479,14 @@ class _BigTimeCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 8,
-                height: 8,
+                width: 9,
+                height: 9,
                 decoration: BoxDecoration(
                   color: effective,
                   shape: BoxShape.circle,
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 7),
               Flexible(
                 child: Text(
                   label,
@@ -481,15 +494,15 @@ class _BigTimeCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: effective,
-                    fontSize: 12.5,
+                    fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
+                    letterSpacing: 0.1,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
@@ -498,22 +511,22 @@ class _BigTimeCard extends StatelessWidget {
               maxLines: 1,
               style: TextStyle(
                 color: muted ? AppColors.textSecondary : AppColors.textPrimary,
-                fontSize: 42,
+                fontSize: 46,
                 height: 1.0,
                 fontWeight: FontWeight.w900,
-                letterSpacing: -1.6,
+                letterSpacing: -1.8,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 8),
           Text(
             hint,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: AppColors.textTertiary,
-              fontSize: 11,
+              fontSize: 11.5,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -542,10 +555,10 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+      padding: const EdgeInsets.fromLTRB(13, 13, 13, 14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.divider, width: 1),
       ),
       child: Column(
@@ -558,11 +571,11 @@ class _StatCard extends StatelessWidget {
             style: const TextStyle(
               color: AppColors.textTertiary,
               fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.1,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 7),
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
@@ -575,10 +588,10 @@ class _StatCard extends StatelessWidget {
                   maxLines: 1,
                   style: TextStyle(
                     color: accent,
-                    fontSize: compact ? 22 : 28,
+                    fontSize: compact ? 23 : 30,
                     height: 1.0,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: -0.8,
+                    letterSpacing: -1.0,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
@@ -587,8 +600,9 @@ class _StatCard extends StatelessWidget {
                     ' $unit',
                     style: const TextStyle(
                       color: AppColors.textSecondary,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.3,
                     ),
                   ),
               ],

@@ -31,8 +31,11 @@ class Phase {
   bool get isWorkout => type == PhaseType.work;
   bool get isRest => type == PhaseType.rest || type == PhaseType.setRest;
 
-  /// 5초 카운트다운 + 음성 안내를 하는 구간
-  bool get hasCountdown => type == PhaseType.work || type == PhaseType.rest;
+  /// 마지막 5초 음성 카운트다운을 하는 구간.
+  ///
+  /// 준비·운동·휴식·세트 간 휴식 **모든 시간 구간**에서 동작한다.
+  /// (5초보다 짧은 구간은 실제로 울릴 수 있는 숫자만 자동으로 남는다)
+  bool get hasCountdown => duration > 0;
 
   String get title => switch (type) {
     PhaseType.prepare => '준비',

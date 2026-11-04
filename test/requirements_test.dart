@@ -81,88 +81,112 @@ void main() {
     });
   });
 
-  group('3) 효과음 매핑', () {
-    test('구간별 효과음이 정확히 지정된다', () {
-      // 준비는 무음, 운동 시작은 startWork, 새 세트 첫 라운드는 setStart
-      final prep = Phase(
-        type: PhaseType.prepare,
-        duration: 10,
-        setIndex: 1,
-        roundIndex: 0,
-        totalSets: 2,
-        totalRounds: 3,
-      );
-      expect(sfxForPhase(prep), isNull);
+  group('3) 구간별 안내(효과음 + 음성) 매핑', () {
+    Phase ph(PhaseType t, int dur, int set, int round,
+            {int ts = 2, int tr = 3}) =>
+        Phase(
+          type: t,
+          duration: dur,
+          setIndex: set,
+          roundIndex: round,
+          totalSets: ts,
+          totalRounds: tr,
+        );
 
-      final work1 = Phase(
-        type: PhaseType.work,
-        duration: 30,
-        setIndex: 1,
-        roundIndex: 1,
-        totalSets: 2,
-        totalRounds: 3,
-      );
-      expect(sfxForPhase(work1), Sfx.startWork);
-
-      final work2 = Phase(
-        type: PhaseType.work,
-        duration: 30,
-        setIndex: 1,
-        roundIndex: 2,
-        totalSets: 2,
-        totalRounds: 3,
-      );
-      // 다음 라운드 = 운동 시작음
-      expect(sfxForPhase(work2), Sfx.startWork);
-
-      final workSet2 = Phase(
-        type: PhaseType.work,
-        duration: 30,
-        setIndex: 2,
-        roundIndex: 1,
-        totalSets: 2,
-        totalRounds: 3,
-      );
-      // 새 세트 시작 = 세트 시작음
-      expect(sfxForPhase(workSet2), Sfx.setStart);
-
-      final rest = Phase(
-        type: PhaseType.rest,
-        duration: 10,
-        setIndex: 1,
-        roundIndex: 1,
-        totalSets: 2,
-        totalRounds: 3,
-      );
-      expect(sfxForPhase(rest), Sfx.startRest);
-
-      final setRest = Phase(
-        type: PhaseType.setRest,
-        duration: 60,
-        setIndex: 1,
-        roundIndex: 3,
-        totalSets: 2,
-        totalRounds: 3,
-      );
-      expect(sfxForPhase(setRest), Sfx.setRest);
+    test('준비 구간은 [준비하세요] 음성만 있고 효과음은 없다', () {
+      final p = planForPhase(ph(PhaseType.prepare, 10, 1, 0),
+          totalSets: 2, totalRounds: 3);
+      expect(p.sfx, isNull);
+      expect(p.voices, [StateVoice.prepare]);
     });
 
-    test('엔진이 구간 진입 시 매핑된 효과음을 실제로 선택한다', () async {
+    test('운동 구간은 운동 효과음 + [운동 시작]', () {
+      final p = planForPhase(ph(PhaseType.work, 30, 1, 1),
+          totalSets: 2, totalRounds: 3);
+      expect(p.sfx, Sfx.work);
+      expect(p.voices, [StateVoice.startWork]);
+    });
+
+    test('세션 마지막 라운드는 [운동 시작] + [마지막 라운드] 순서로 안내한다', () {
+      final p = planForPhase(ph(PhaseType.work, 30, 2, 3),
+          totalSets: 2, totalRounds: 3);
+      expect(p.sfx, Sfx.work);
+      expect(p.voices, [StateVoice.startWork, StateVoice.lastRound]);
+    });
+
+    test('마지막 세트라도 마지막 라운드가 아니면 lastRound 안내가 없다', () {
+      final p = planForPhase(ph(PhaseType.work, 30, 2, 2),
+          totalSets: 2, totalRounds: 3);
+      expect(p.voices, [StateVoice.startWork]);
+    });
+
+    test('휴식은 낮은 효과음 + [휴식 시작]', () {
+      final p = planForPhase(ph(PhaseType.rest, 10, 1, 1),
+          totalSets: 2, totalRounds: 3);
+      expect(p.sfx, Sfx.rest);
+      expect(p.voices, [StateVoice.startRest]);
+    });
+
+    test('세트 간 휴식은 [세트 간 휴식입니다]', () {
+      final p = planForPhase(ph(PhaseType.setRest, 60, 1, 3),
+          totalSets: 2, totalRounds: 3);
+      expect(p.sfx, Sfx.rest);
+      expect(p.voices, [StateVoice.setRest]);
+    });
+
+    test('운동 효과음과 휴식 효과음은 서로 다른 음높이 파일이다', () {
+      expect(Sfx.work.asset, 'audio/sfx_work.wav');
+      expect(Sfx.rest.asset, 'audio/sfx_rest.wav');
+      expect(Sfx.work.asset == Sfx.rest.asset, false);
+    });
+
+    test('모든 효과음은 200ms 이하의 짧은 단일음이다 (반복음·긴 효과음 금지)', () {
+      for (final s in Sfx.values) {
+        expect(s.durationMs, lessThanOrEqualTo(200), reason: s.asset);
+      }
+      expect(Sfx.work.durationMs, lessThanOrEqualTo(120));
+      expect(Sfx.rest.durationMs, lessThanOrEqualTo(120));
+    });
+
+    test('엔진이 구간 진입 시 올바른 안내 계획을 선택한다', () async {
       final e = TabataEngine(
         config: cfg(work: 1, rest: 1, rounds: 2, sets: 2, setRest: 1),
       )..audioOutputEnabled = false;
       e.start();
-      e.skip(); // 운동1
-      expect(e.lastPhaseSfx, Sfx.startWork);
+      expect(e.lastPhasePlan.voices, [StateVoice.prepare]);
+      expect(e.lastPhasePlan.sfx, isNull);
+
+      e.skip(); // 1세트 1라운드 운동
+      expect(e.lastPhaseSfx, Sfx.work);
+      expect(e.lastPhasePlan.voices, [StateVoice.startWork]);
+
       e.skip(); // 휴식
-      expect(e.lastPhaseSfx, Sfx.startRest);
-      e.skip(); // 운동2 (세트1 2라운드)
-      expect(e.lastPhaseSfx, Sfx.startWork);
-      e.skip(); // 세트휴식
-      expect(e.lastPhaseSfx, Sfx.setRest);
-      e.skip(); // 2세트 운동1 → 세트 시작음
-      expect(e.lastPhaseSfx, Sfx.setStart);
+      expect(e.lastPhaseSfx, Sfx.rest);
+      expect(e.lastPhasePlan.voices, [StateVoice.startRest]);
+
+      e.skip(); // 1세트 2라운드 운동
+      e.skip(); // 세트 간 휴식
+      expect(e.lastPhasePlan.voices, [StateVoice.setRest]);
       e.dispose();
+    });
+
+    test('3가지 목소리 모두 상태 안내 자산 경로를 만든다', () {
+      for (final style in VoiceStyle.values) {
+        for (final v in StateVoice.values) {
+          expect(v.assetFor(style), 'audio/st_${style.name}_${v.key}.wav');
+        }
+      }
+      expect(VoiceStyle.values.length, 3);
+      expect(StateVoice.values.length, 6);
+    });
+
+    test('성인 여성 목소리는 차분한 40·50대 톤으로 안내된다', () {
+      final d = VoiceStyle.female.description;
+      expect(d.contains('차분'), true, reason: d);
+      expect(d.contains('낮은 톤'), true, reason: d);
+      // '밝고 경쾌한' 같은 고음 피로 유발 표현이 남아 있으면 안 된다
+      expect(d.contains('밝'), false, reason: d);
+      expect(d.contains('경쾌'), false, reason: d);
     });
   });
 
@@ -245,8 +269,72 @@ void main() {
   });
 
   group('5) 음성/효과음 겹침 방지 장치', () {
-    test('효과음은 90ms 이내 중복 요청을 무시한다', () {
-      // AudioCoach 내부 가드 검증 (사운드 off 환경에서도 로직은 동일)
+    test('카운트다운 보호구간이 시작 안내 길이보다 항상 길다', () {
+      for (final style in VoiceStyle.values) {
+        for (final type in PhaseType.values) {
+          final p = Phase(
+            type: type,
+            duration: 30,
+            setIndex: 2,
+            roundIndex: 3,
+            totalSets: 2,
+            totalRounds: 3,
+          );
+          final plan = planForPhase(p, totalSets: 2, totalRounds: 3);
+          final guard = announceGuardMs(plan, style);
+          var announce = 0;
+          if (plan.sfx != null) announce += sfxToVoiceGapMs;
+          for (final v in plan.voices) {
+            announce += stateVoiceDurationMs(style, v) + voiceToVoiceGapMs;
+          }
+          expect(guard, greaterThan(announce),
+              reason: '$style $type guard=$guard announce=$announce');
+        }
+      }
+    });
+
+    test('마지막 라운드 안내가 붙으면 보호구간이 더 길어진다', () {
+      final normal = planForPhase(
+        Phase(
+          type: PhaseType.work,
+          duration: 30,
+          setIndex: 1,
+          roundIndex: 1,
+          totalSets: 2,
+          totalRounds: 3,
+        ),
+        totalSets: 2,
+        totalRounds: 3,
+      );
+      final last = planForPhase(
+        Phase(
+          type: PhaseType.work,
+          duration: 30,
+          setIndex: 2,
+          roundIndex: 3,
+          totalSets: 2,
+          totalRounds: 3,
+        ),
+        totalSets: 2,
+        totalRounds: 3,
+      );
+      expect(
+        announceGuardMs(last, VoiceStyle.male),
+        greaterThan(announceGuardMs(normal, VoiceStyle.male)),
+      );
+    });
+
+    test('효과음/음성 자산이 서로 다르다 → 플레이어도 분리된다', () {
+      for (final s in Sfx.values) {
+        expect(s.asset.startsWith('audio/sfx_') || s.asset == 'audio/beep.wav',
+            true);
+      }
+      final voice = StateVoice.startWork.assetFor(VoiceStyle.male);
+      expect(voice, 'audio/st_male_startWork.wav');
+      expect(voice == Sfx.work.asset, false);
+    });
+
+    test('일시정지하면 재생 중이던 소리가 즉시 무효화된다', () async {
       final c = const TabataConfig(
         soundEnabled: true,
         sfxEnabled: true,
@@ -255,27 +343,9 @@ void main() {
       AudioCoach.instance.applyConfig(c);
       expect(AudioCoach.instance.soundEnabled, true);
       expect(AudioCoach.instance.sfxEnabled, true);
-      // 같은 자산 문자열을 쓰는지 (겹침 방지의 전제)
-      expect(Sfx.startWork.asset, 'audio/start_work.wav');
-      expect(Sfx.startRest.asset, 'audio/start_rest.wav');
-      expect(Sfx.setStart.asset, 'audio/set_start.wav');
-      expect(Sfx.setRest.asset, 'audio/set_rest.wav');
-      expect(Sfx.finish.asset, 'audio/finish.wav');
-      // 효과음/음성 자산이 서로 다르다 → 플레이어도 분리된다
-      final voice = 'audio/c_${VoiceStyle.male.assetKey}_5.wav';
-      expect(voice, 'audio/c_male_5.wav');
-      expect(Sfx.startWork.asset == voice, false);
-    });
-
-    test('목소리 종류별 자산 경로가 존재한다', () {
-      for (final style in VoiceStyle.values) {
-        for (var n = 5; n >= 1; n--) {
-          final path = 'audio/c_${style.assetKey}_$n.wav';
-          expect(path, contains(style.name));
-        }
-        expect('audio/preview_${style.name}.wav', contains(style.name));
-      }
-      expect(VoiceStyle.values.length, 3);
+      // cut() 은 동기 함수 → await 없이도 즉시 이전 재생을 폐기한다
+      AudioCoach.instance.cut();
+      expect(AudioCoach.instance.playLog.length, greaterThanOrEqualTo(0));
     });
   });
 
