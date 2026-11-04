@@ -37,6 +37,8 @@ dependencies:
   audioplayers: 6.1.0
   flutter_local_notifications: 17.2.4
   timezone: 0.9.4
+  flutter_tts: 4.2.0
+  wakelock_plus: 1.2.10
   shared_preferences: 2.5.3
 
 dev_dependencies:

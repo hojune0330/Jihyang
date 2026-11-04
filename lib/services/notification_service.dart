@@ -75,7 +75,7 @@ class NotificationService {
           final next = phases[nextIndex];
           final isWork = next.type.name == 'work';
           final body = isWork
-              ? '${next.setIndex}세트 · ${next.exerciseIndex} / ${next.totalExercises}개'
+              ? '${next.setIndex}세트 · ${next.roundIndex} / ${next.totalRounds}라운드'
               : '${_fmtDuration(next.duration)} 휴식';
           await _schedule(at: boundary, title: '${next.title} 시작', body: body);
         } else {

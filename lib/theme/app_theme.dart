@@ -1,55 +1,35 @@
 import 'package:flutter/material.dart';
 
-/// 타바타 앱 전역 디자인 토큰
+/// 무광 단색 디자인 토큰.
+/// 그라데이션 / 네온 / 발광 / 과한 그림자를 사용하지 않는다.
 class AppColors {
   AppColors._();
 
-  // 배경 — 순수 블랙
-  static const Color background = Color(0xFF000000);
-  static const Color surface = Color(0xFF121214);
-  static const Color surfaceHigh = Color(0xFF1C1C20);
-  static const Color stroke = Color(0xFF2C2C31);
+  /// 짙은 차콜 배경
+  static const Color background = Color(0xFF0B0B0D);
+  static const Color surface = Color(0xFF17171A);
+  static const Color surfaceHigh = Color(0xFF222227);
+  static const Color divider = Color(0xFF2E2E34);
 
-  // 구간 색 — 진하게
-  static const Color work = Color(0xFFFF1744); // 운동 : 비비드 레드
-  static const Color rest = Color(0xFF2979FF); // 휴식 : 비비드 블루
-  static const Color prepare = Color(0xFFFFB300); // 준비 : 앰버
+  /// 운동 : 진하고 선명한 빨강
+  static const Color work = Color(0xFFFF2D2D);
 
-  // 시간 단위 색 — 구간 색 계열 안에서 서로 뚜렷이 구분되는 진한 색
-  static const Color hourColor = Color(0xFF00E5FF); // 시
+  /// 휴식 : 진하고 선명한 파랑
+  static const Color rest = Color(0xFF1F6FFF);
 
-  // 운동(빨강 계열) 안에서 '분'과 '초'를 확실히 다르게
-  static const Color workMinute = Color(0xFFFF9100); // 운동 중 '분' : 비비드 오렌지
-  static const Color workSecond = Color(0xFFFF0059); // 운동 중 '초' : 비비드 크림슨
-  // 휴식(파랑 계열) 안에서 '분'과 '초'를 확실히 다르게
-  static const Color restMinute = Color(0xFF00E5FF); // 휴식 중 '분' : 비비드 시안
-  static const Color restSecond = Color(0xFF2B5BFF); // 휴식 중 '초' : 비비드 블루
-  static const Color setRestMinutesColor = Color(0xFFB388FF); // 세트 휴식
-  static const Color prepareMinute = Color(0xFFFFC400); // 준비 중 '분'
-  static const Color prepareSecond = Color(0xFFFF8F00); // 준비 중 '초'
+  /// 준비 / 카운트다운 : 선명한 노랑
+  static const Color prepare = Color(0xFFFFD60A);
 
-  static const Color textPrimary = Color(0xFFF7F7FA);
-  static const Color textSecondary = Color(0xFF9A9AA6);
+  static const Color textPrimary = Color(0xFFFFFFFF);
+  static const Color textSecondary = Color(0xFF9A9AA2);
+  static const Color textTertiary = Color(0xFF5E5E66);
 
-  static Color forPhase(String type) => switch (type) {
+  static Color of(String phaseType) => switch (phaseType) {
     'work' => work,
     'rest' => rest,
     'setRest' => rest,
+    'prepare' => prepare,
     _ => prepare,
-  };
-
-  static Color minuteFor(String type) => switch (type) {
-    'work' => workMinute,
-    'rest' => restMinute,
-    'setRest' => restMinute,
-    _ => prepareMinute,
-  };
-
-  static Color secondFor(String type) => switch (type) {
-    'work' => workSecond,
-    'rest' => restSecond,
-    'setRest' => restSecond,
-    _ => prepareSecond,
   };
 }
 
@@ -66,7 +46,8 @@ class AppTheme {
         surface: AppColors.surface,
         onSurface: AppColors.textPrimary,
       ),
-      splashFactory: InkSparkle.splashFactory,
+      splashFactory: InkRipple.splashFactory,
+      dividerColor: AppColors.divider,
       textTheme: base.textTheme.apply(
         bodyColor: AppColors.textPrimary,
         displayColor: AppColors.textPrimary,

@@ -1,17 +1,19 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
+import 'models/tabata_config.dart';
+import 'screens/finished_screen.dart';
+import 'screens/ready_screen.dart';
+import 'screens/running_screen.dart';
+import 'screens/settings_screen.dart';
+import 'services/audio_coach.dart';
 import 'services/config_store.dart';
 import 'services/notification_service.dart';
 import 'services/session_store.dart';
-import 'services/sound_service.dart';
 import 'services/tabata_engine.dart';
-import 'models/phase.dart';
-import 'models/tabata_config.dart';
 import 'theme/app_theme.dart';
-import 'widgets/quick_stepper.dart';
-import 'widgets/round_dots.dart';
-import 'widgets/timer_display.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,11 +26,11 @@ void main() async {
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
       statusBarBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.black,
+      systemNavigationBarColor: AppColors.background,
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
-  await SoundService.instance.init();
+  await AudioCoach.instance.init();
   await NotificationService.instance.init();
   runApp(const TabataApp());
 }
@@ -42,23 +44,59 @@ class TabataApp extends StatelessWidget {
       title: '타바타 타이머',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const TimerScreen(),
+      home: const _ShotWrapper(child: AppShell()),
     );
   }
 }
 
-class TimerScreen extends StatefulWidget {
-  const TimerScreen({super.key});
+/// 스크린샷 검증용 래퍼 (--dart-define=SHOT=settings 일 때 설정 화면을 바로 렌더)
+class _ShotWrapper extends StatelessWidget {
+  const _ShotWrapper({required this.child});
+
+  final Widget child;
 
   @override
-  State<TimerScreen> createState() => _TimerScreenState();
+  Widget build(BuildContext context) {
+    // 디버그 빌드에서만 동작하는 화면 검증용 바로가기
+    if (kDebugMode) {
+      const shot = String.fromEnvironment('SHOT');
+      if (shot == 'settings') {
+        return const SettingsScreen(initial: TabataConfig());
+      }
+      if (shot == 'finished') {
+        return FinishedScreen(
+          sets: 2,
+          totalSets: 2,
+          rounds: 16,
+          totalRounds: 16,
+          elapsedMs: 1000 * 60 * 22 + 1000 * 43,
+          onRestart: () {},
+          onHome: () {},
+        );
+      }
+    }
+    return child;
+  }
 }
 
-class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
+enum AppScreen { ready, running, finished }
+
+class AppShell extends StatefulWidget {
+  const AppShell({super.key});
+
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final TabataEngine _engine;
   TabataConfig _config = const TabataConfig();
   bool _loaded = false;
+  AppScreen _screen = AppScreen.ready;
+  bool _hasSavedSession = false;
+
   DateTime _lastSnapshot = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _wakelockOn = false;
 
   @override
   void initState() {
@@ -73,44 +111,74 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     // 검증용 빠른 설정 (빌드 시 --dart-define=FAST=true)
     if (const bool.fromEnvironment('FAST')) {
       cfg = const TabataConfig(
-        workSeconds: 5,
-        restSeconds: 5,
-        exerciseCount: 4,
-        setCount: 1,
-        setRestMinutes: 0,
-        prepareSeconds: 0,
-        soundEnabled: false,
+        workSeconds: 4,
+        restSeconds: 3,
+        rounds: 3,
+        sets: 2,
+        setRestSeconds: 4,
+        voiceEnabled: true,
+        sfxEnabled: false,
       );
     }
     final session = await SessionStore.load();
     if (!mounted) return;
+
     setState(() {
       _config = cfg;
       _loaded = true;
     });
+    _engine.updateConfig(cfg);
+
     if (session != null) {
-      // 화면이 꺼졌거나 앱이 종료됐던 세션 복원
       _engine.restoreFromSnapshot(session);
-      final restored = _engine.config;
-      if (mounted) setState(() => _config = restored);
-    } else {
-      _engine.updateConfig(cfg);
+      final restoredConfig = _engine.config;
+      final restored = _engine.isRunning || _engine.isPaused;
+      if (!mounted) return;
+      setState(() {
+        _config = restoredConfig;
+        _hasSavedSession = restored;
+      });
     }
-    // 검증용 자동 시작 (빌드 시 --dart-define=AUTOSTART=true)
-    if (const bool.fromEnvironment('AUTOSTART') && _engine.isIdle) {
-      _engine.start();
+
+    // 화면 검증용 자동 시작 (빌드 시 --dart-define=AUTOSTART=true)
+    if (const bool.fromEnvironment('AUTOSTART')) {
+      _start();
     }
   }
 
   void _onEngine() {
     if (!mounted) return;
-    setState(() {});
+    final status = _engine.status;
+    AppScreen target;
+    if (status == EngineStatus.finished) {
+      target = AppScreen.finished;
+    } else if (status == EngineStatus.running ||
+        status == EngineStatus.paused) {
+      target = AppScreen.running;
+    } else {
+      target = AppScreen.ready;
+    }
+    if (target != _screen) {
+      setState(() => _screen = target);
+    } else {
+      setState(() {});
+    }
+    _syncSideEffects(status);
     _persistSession();
   }
 
-  /// 진행 상태를 주기적으로 저장 (과도한 IO 방지: 최대 1초에 1회)
+  void _syncSideEffects(EngineStatus status) {
+    // 운동 중에는 화면이 꺼지지 않도록 유지
+    final keepAwake =
+        status == EngineStatus.running || status == EngineStatus.paused;
+    if (keepAwake != _wakelockOn) {
+      _wakelockOn = keepAwake;
+      WakelockPlus.toggle(enable: keepAwake).catchError((_) {});
+    }
+  }
+
   void _persistSession() {
-    if (_engine.isIdle) {
+    if (_engine.isIdle || _engine.isFinished) {
       if (_lastSnapshot.millisecondsSinceEpoch != 0) {
         _lastSnapshot = DateTime.fromMillisecondsSinceEpoch(0);
         SessionStore.clear();
@@ -125,14 +193,14 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // 복귀 시 밀린 구간을 즉시 반영 (엔진은 벽시계 기반이라 시간이 틀어지지 않음)
     if (state == AppLifecycleState.resumed) {
       _engine.catchUp();
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
-      // 백그라운드로 밀리기 직전 상태 저장 (프로세스 종료 대비)
-      if (!_engine.isIdle) SessionStore.save(_engine.snapshot());
+      if (!_engine.isIdle && !_engine.isFinished) {
+        SessionStore.save(_engine.snapshot());
+      }
     }
   }
 
@@ -141,27 +209,112 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _engine.removeListener(_onEngine);
     _engine.dispose();
+    WakelockPlus.disable().catchError((_) {});
     super.dispose();
   }
 
-  void _onStart() {
-    SoundService.instance.init();
-    _engine.toggle();
-    if (_engine.isRunning) {
-      // 화면이 꺼져도 구간 전환을 알 수 있도록 시스템에 예약
-      NotificationService.instance.scheduleSession(_engine);
-    } else {
+  // ------------------------------------------------------------ 액션
+
+  Future<void> _openSettings() async {
+    final result = await Navigator.of(context).push<TabataConfig>(
+      MaterialPageRoute(builder: (_) => SettingsScreen(initial: _config)),
+    );
+    if (result == null || !mounted) return;
+    setState(() => _config = result);
+    _engine.updateConfig(result);
+    await ConfigStore.save(result);
+    NotificationService.instance.cancelAll();
+    AudioCoach.instance.voiceEnabled = result.voiceEnabled;
+    AudioCoach.instance.sfxEnabled = result.sfxEnabled;
+  }
+
+  void _start() {
+    AudioCoach.instance.voiceEnabled = _config.voiceEnabled;
+    AudioCoach.instance.sfxEnabled = _config.sfxEnabled;
+    _engine.start();
+    NotificationService.instance.scheduleSession(_engine);
+  }
+
+  Future<void> _confirmStop() async {
+    final pauseBefore = _engine.isRunning;
+    if (pauseBefore) _engine.pause();
+
+    final quit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surfaceHigh,
+        title: const Text(
+          '운동을 종료할까요?',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        ),
+        content: const Text(
+          '지금 종료하면 진행 상황이 사라집니다.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text(
+              '계속하기',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text(
+              '종료',
+              style: TextStyle(
+                color: AppColors.work,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+    if (quit == true) {
       NotificationService.instance.cancelAll();
+      await AudioCoach.instance.stopAll();
+      _engine.reset();
+      setState(() {
+        _screen = AppScreen.ready;
+        _hasSavedSession = false;
+      });
+    } else if (pauseBefore) {
+      _engine.resume();
     }
   }
 
-  void _change(TabataConfig next) {
-    setState(() => _config = next);
-    _engine.updateConfig(next);
+  void _restart() {
     NotificationService.instance.cancelAll();
-    ConfigStore.save(next);
-    SoundService.instance.vibrate();
+    _engine.reset();
+    _engine.start();
+    NotificationService.instance.scheduleSession(_engine);
   }
+
+  void _goHome() {
+    NotificationService.instance.cancelAll();
+    _engine.reset();
+    setState(() {
+      _screen = AppScreen.ready;
+      _hasSavedSession = false;
+    });
+  }
+
+  void _resumeSaved() {
+    setState(() {
+      _screen = AppScreen.running;
+      _hasSavedSession = false;
+    });
+    if (_engine.isPaused) _engine.resume();
+  }
+
+  // ------------------------------------------------------------ build
 
   @override
   Widget build(BuildContext context) {
@@ -170,637 +323,65 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
         backgroundColor: AppColors.background,
         body: Center(
           child: SizedBox(
-            width: 26,
-            height: 26,
+            width: 24,
+            height: 24,
             child: CircularProgressIndicator(
-              strokeWidth: 2.4,
-              color: AppColors.work,
-            ),
-          ),
-        ),
-      );
-    }
-
-    final phase = _engine.currentPhase;
-    final type = phase?.type.name ?? 'work';
-    final accent = _engine.isIdle ? AppColors.work : AppColors.forPhase(type);
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(0, -0.15),
-            radius: 1.0,
-            colors: [
-              accent.withValues(alpha: _engine.isIdle ? 0.05 : 0.15),
-              AppColors.background,
-            ],
-            stops: const [0.0, 0.75],
-          ),
-        ),
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, box) {
-              return Column(
-                children: [
-                  _header(accent),
-                  Expanded(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 18),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _phaseLabel(phase, accent),
-                            const SizedBox(height: 12),
-                            _time(phase, type, box),
-                            const SizedBox(height: 14),
-                            _roundDots(accent),
-                            const SizedBox(height: 10),
-                            _roundLine(accent),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  _progressZone(accent),
-                  _settingsZone(accent),
-                  _controls(accent),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ------------------------------------------------------------ 상단
-
-  Widget _header(Color accent) {
-    final status = _engine.isRunning
-        ? '진행 중'
-        : _engine.isPaused
-        ? '일시정지'
-        : _engine.isFinished
-        ? '완료'
-        : '준비';
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-      child: Row(
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: accent,
-              boxShadow: [
-                BoxShadow(color: accent.withValues(alpha: 0.9), blurRadius: 10),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            '타바타 타이머',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.2,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            status,
-            style: TextStyle(
-              color: _engine.isIdle ? AppColors.textSecondary : accent,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(width: 10),
-        ],
-      ),
-    );
-  }
-
-  Widget _phaseLabel(Phase? phase, Color accent) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: accent.withValues(alpha: 0.55), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            _engine.isIdle || phase?.isWorkout == true
-                ? Icons.local_fire_department_rounded
-                : phase?.isRest == true
-                ? Icons.self_improvement_rounded
-                : Icons.hourglass_bottom_rounded,
-            size: 14,
-            color: accent,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            _engine.isIdle ? '운동 시간' : (phase?.title ?? '준비'),
-            style: TextStyle(
-              color: accent,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _time(Phase? phase, String type, BoxConstraints box) {
-    // 화면 중앙에 가장 크게 — 세로 공간의 약 26%
-    final size = (box.maxHeight * 0.30).clamp(84.0, 190.0);
-    final seconds = _engine.isIdle
-        ? (phase?.duration ?? _config.workSeconds)
-        : _engine.remainingSeconds;
-
-    // 구간이 바뀌면 색이 즉시 전환되어야 혼동이 없다 (크로스페이드 금지)
-    return BigTimeDisplay(
-      totalSeconds: seconds,
-      phaseType: type,
-      fontSize: size,
-    );
-  }
-
-  Widget _roundDots(Color accent) {
-    if (_engine.isIdle) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 26),
-      child: RoundDots(
-        total: _engine.totalRounds,
-        current: _engine.currentRound,
-        accent: accent,
-      ),
-    );
-  }
-
-  Widget _roundLine(Color accent) {
-    if (_engine.isIdle) {
-      final total = _config.totalSeconds;
-      final label =
-          '${_config.exerciseCount}개 · ${_config.setCount}세트 · ${_config.setRestMinutes}분 휴식   |   총 ${_mmss(total)}';
-      return Text(
-        label,
-        style: const TextStyle(
-          color: AppColors.textSecondary,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.2,
-        ),
-      );
-    }
-
-    final round = '라운드 ${_engine.currentRound} / ${_engine.totalRounds}';
-    final set = _engine.totalSets > 1
-        ? '   ·   세트 ${_engine.currentSet} / ${_engine.totalSets}'
-        : '';
-    return RichText(
-      text: TextSpan(
-        children: [
-          TextSpan(
-            text: round,
-            style: TextStyle(
-              color: accent,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.3,
-            ),
-          ),
-          TextSpan(
-            text: set,
-            style: const TextStyle(
+              strokeWidth: 2.2,
               color: AppColors.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  // ------------------------------------------------------------ 진행률
-
-  Widget _progressZone(Color accent) {
-    final progress = _engine.isIdle ? 0.0 : _engine.totalProgress;
-    final remainTotal = _engine.isIdle
-        ? _config.totalSeconds
-        : _engine.remainingTotalSeconds;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Text(
-                _engine.isFinished ? '완료' : '전체 진행률',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${(progress * 100).round()}%',
-                style: TextStyle(
-                  color: accent,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                _mmss(remainTotal),
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: Stack(
-              children: [
-                Container(
-                  height: 5,
-                  color: AppColors.stroke.withValues(alpha: 0.6),
-                ),
-                FractionallySizedBox(
-                  widthFactor: progress.clamp(0.0, 1.0),
-                  child: Container(
-                    height: 5,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [accent.withValues(alpha: 0.7), accent],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: accent.withValues(alpha: 0.8),
-                          blurRadius: 10,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ------------------------------------------------------------ 설정 (인라인)
-
-  Widget _settingsZone(Color accent) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: QuickStepper(
-                  label: '운동',
-                  value: _config.workSeconds,
-                  unit: '초',
-                  min: 5,
-                  max: 120,
-                  step: 5,
-                  accent: AppColors.work,
-                  onChanged: (v) => _change(_config.copyWith(workSeconds: v)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: QuickStepper(
-                  label: '휴식',
-                  value: _config.restSeconds,
-                  unit: '초',
-                  min: 0,
-                  max: 60,
-                  step: 5,
-                  accent: AppColors.rest,
-                  onChanged: (v) => _change(_config.copyWith(restSeconds: v)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: QuickStepper(
-                  label: '운동 개수',
-                  value: _config.exerciseCount,
-                  unit: '개',
-                  min: 1,
-                  max: 30,
-                  accent: AppColors.prepare,
-                  onChanged: (v) => _change(_config.copyWith(exerciseCount: v)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: QuickStepper(
-                  label: '세트 수',
-                  value: _config.setCount,
-                  unit: '세트',
-                  min: 1,
-                  max: 20,
-                  accent: AppColors.hourColor,
-                  onChanged: (v) => _change(_config.copyWith(setCount: v)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: QuickStepper(
-                  label: '세트 간 휴식',
-                  value: _config.setRestMinutes,
-                  unit: '분',
-                  min: 0,
-                  max: 10,
-                  accent: AppColors.setRestMinutesColor,
-                  onChanged: (v) =>
-                      _change(_config.copyWith(setRestMinutes: v)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _SoundCell(
-                  enabled: _config.soundEnabled,
-                  onTap: () => _change(
-                    _config.copyWith(soundEnabled: !_config.soundEnabled),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ------------------------------------------------------------ 컨트롤
-
-  Widget _controls(Color accent) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
-      child: Row(
-        children: [
-          _CircleButton(
-            icon: Icons.refresh_rounded,
-            accent: AppColors.textPrimary,
-            size: 58,
-            onTap: () {
-              NotificationService.instance.cancelAll();
-              _engine.reset();
-            },
-          ),
-          _CircleButton(
-            icon: Icons.skip_next_rounded,
-            accent: AppColors.textSecondary,
-            size: 52,
-            onTap: _engine.isIdle ? null : () => _engine.skip(),
-          ),
-          const SizedBox(width: 0),
-          const Spacer(),
-          _MainButton(
-            running: _engine.isRunning,
-            finished: _engine.isFinished,
-            paused: _engine.isPaused,
-            accent: accent,
-            onTap: _onStart,
-          ),
-          const Spacer(),
-          _CircleButton(
-            icon: Icons.vibration_rounded,
-            accent: _config.vibrationEnabled
-                ? AppColors.rest
-                : AppColors.textSecondary,
-            size: 52,
-            onTap: () {
-              _change(
-                _config.copyWith(vibrationEnabled: !_config.vibrationEnabled),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _mmss(int total) {
-    final h = total ~/ 3600;
-    final m = (total % 3600) ~/ 60;
-    final s = total % 60;
-    if (h > 0) {
-      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+        ),
+      );
     }
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-}
 
-class _CircleButton extends StatelessWidget {
-  const _CircleButton({
-    required this.icon,
-    required this.accent,
-    required this.size,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final Color accent;
-  final double size;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final active = onTap != null;
-    return Opacity(
-      opacity: active ? 1 : 0.3,
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.surface,
-              border: Border.all(
-                color: accent.withValues(alpha: 0.22),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Icon(icon, size: size * 0.42, color: accent),
-          ),
-        ),
+    return PopScope(
+      canPop: _screen == AppScreen.ready,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_screen == AppScreen.running) _confirmStop();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        // 불필요한 애니메이션 없이 즉시 전환 (구간 색상이 곧바로 바뀌어야 함)
+        body: KeyedSubtree(key: ValueKey(_screen), child: _buildScreen()),
       ),
     );
   }
-}
 
-/// 화면에서 가장 눈에 띄는 주 버튼
-class _MainButton extends StatelessWidget {
-  const _MainButton({
-    required this.running,
-    required this.paused,
-    required this.finished,
-    required this.accent,
-    required this.onTap,
-  });
-
-  final bool running;
-  final bool paused;
-  final bool finished;
-  final Color accent;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = running ? AppColors.prepare : accent;
-    final icon = running
-        ? Icons.pause_rounded
-        : finished
-        ? Icons.replay_rounded
-        : Icons.play_arrow_rounded;
-    final label = running
-        ? '일시정지'
-        : paused
-        ? '계속'
-        : finished
-        ? '다시'
-        : '시작';
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Material(
-          color: Colors.transparent,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: Container(
-              width: 86,
-              height: 86,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color.lerp(color, Colors.white, 0.18)!,
-                    color,
-                    Color.lerp(color, Colors.black, 0.30)!,
-                  ],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withValues(alpha: 0.55),
-                    blurRadius: 28,
-                    spreadRadius: -2,
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.7),
-                    blurRadius: 14,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Icon(icon, size: 44, color: Colors.white),
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.8,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// 소리 켜기/끄기 셀 (설정 그리드 6번째 칸)
-class _SoundCell extends StatelessWidget {
-  const _SoundCell({required this.enabled, required this.onTap});
-
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = enabled ? AppColors.work : AppColors.textSecondary;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        height: 48,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: accent.withValues(alpha: 0.22), width: 1),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              enabled ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-              size: 17,
-              color: accent.withValues(alpha: enabled ? 1 : 0.5),
-            ),
-            const SizedBox(height: 1),
-            Text(
-              enabled ? '소리 켬' : '소리 끔',
-              style: TextStyle(
-                color: accent,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                height: 1.2,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  Widget _buildScreen() {
+    switch (_screen) {
+      case AppScreen.ready:
+        return ReadyScreen(
+          config: _config,
+          onStart: _start,
+          onOpenSettings: _openSettings,
+          hasSavedSession: _hasSavedSession,
+          onResumeSession: _resumeSaved,
+        );
+      case AppScreen.running:
+        return RunningScreen(
+          engine: _engine,
+          onPauseToggle: () {
+            _engine.toggle();
+            if (_engine.isRunning) {
+              NotificationService.instance.scheduleSession(_engine);
+            } else {
+              NotificationService.instance.cancelAll();
+            }
+          },
+          onStop: _confirmStop,
+          onSkip: () => _engine.skip(),
+        );
+      case AppScreen.finished:
+        return FinishedScreen(
+          sets: _engine.isFinished ? _config.sets : _engine.completedSets,
+          totalSets: _config.sets,
+          rounds: _config.totalRounds,
+          totalRounds: _config.totalRounds,
+          elapsedMs: _engine.elapsedTotalMs,
+          onRestart: _restart,
+          onHome: _goHome,
+        );
+    }
   }
 }

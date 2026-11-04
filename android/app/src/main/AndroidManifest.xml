@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
-        android:label="Tabata Timer"
+        android:label="타바타 타이머"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

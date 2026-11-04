@@ -1,127 +1,134 @@
 import 'phase.dart';
 
-/// 타바타 설정값
+/// 타바타 설정값.
+///
+/// 시간은 모두 '초' 단위로 보관하고, 화면에서는 분/초로 나누어 보여준다.
 class TabataConfig {
   const TabataConfig({
-    this.workSeconds = 20,
-    this.restSeconds = 10,
-    this.exerciseCount = 8,
-    this.setCount = 1,
-    this.setRestMinutes = 2,
-    this.prepareSeconds = 10,
-    this.soundEnabled = true,
-    this.vibrationEnabled = true,
+    this.workSeconds = 30,
+    this.restSeconds = 15,
+    this.rounds = 8,
+    this.sets = 1,
+    this.setRestSeconds = 60,
+    this.voiceEnabled = true,
+    this.sfxEnabled = true,
   });
 
-  /// 운동 시간 (초)
+  /// 운동 시간(초)
   final int workSeconds;
 
-  /// 운동 사이 휴식 (초)
+  /// 운동 사이 휴식(초)
   final int restSeconds;
 
-  /// 운동 개수 (n개)
-  final int exerciseCount;
+  /// 라운드 수 (한 세트 안의 운동 개수)
+  final int rounds;
 
-  /// 세트 수 (n세트)
-  final int setCount;
+  /// 세트 수
+  final int sets;
 
-  /// 세트 간 휴식 (n분)
-  final int setRestMinutes;
+  /// 세트 간 휴식(초)
+  final int setRestSeconds;
 
-  /// 시작 전 준비 시간 (초)
-  final int prepareSeconds;
+  /// 음성 안내 사용
+  final bool voiceEnabled;
 
-  final bool soundEnabled;
-  final bool vibrationEnabled;
+  /// 효과음 사용
+  final bool sfxEnabled;
+
+  /// 시작 전 카운트다운 — 설정 항목으로 노출하지 않고 고정
+  static const int prepareSeconds = 3;
+
+  int get workMinutes => workSeconds ~/ 60;
+  int get workSecondsPart => workSeconds % 60;
+  int get restMinutes => restSeconds ~/ 60;
+  int get restSecondsPart => restSeconds % 60;
+  int get setRestMinutes => setRestSeconds ~/ 60;
+  int get setRestSecondsPart => setRestSeconds % 60;
 
   TabataConfig copyWith({
     int? workSeconds,
     int? restSeconds,
-    int? exerciseCount,
-    int? setCount,
-    int? setRestMinutes,
-    int? prepareSeconds,
-    bool? soundEnabled,
-    bool? vibrationEnabled,
+    int? rounds,
+    int? sets,
+    int? setRestSeconds,
+    bool? voiceEnabled,
+    bool? sfxEnabled,
   }) {
     return TabataConfig(
       workSeconds: workSeconds ?? this.workSeconds,
       restSeconds: restSeconds ?? this.restSeconds,
-      exerciseCount: exerciseCount ?? this.exerciseCount,
-      setCount: setCount ?? this.setCount,
-      setRestMinutes: setRestMinutes ?? this.setRestMinutes,
-      prepareSeconds: prepareSeconds ?? this.prepareSeconds,
-      soundEnabled: soundEnabled ?? this.soundEnabled,
-      vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
+      rounds: rounds ?? this.rounds,
+      sets: sets ?? this.sets,
+      setRestSeconds: setRestSeconds ?? this.setRestSeconds,
+      voiceEnabled: voiceEnabled ?? this.voiceEnabled,
+      sfxEnabled: sfxEnabled ?? this.sfxEnabled,
     );
   }
 
-  /// 세트 사이 휴식(초)
-  int get setRestSeconds => setRestMinutes * 60;
+  /// 1세트 시간(초)
+  int get setSeconds => rounds * workSeconds + (rounds - 1) * restSeconds;
 
-  /// 1세트 총 시간
-  int get setSeconds =>
-      exerciseCount * workSeconds + (exerciseCount - 1) * restSeconds;
-
-  /// 전체 예상 소요 시간(초)
+  /// 전체 예상 시간(초)
   int get totalSeconds =>
-      prepareSeconds + setCount * setSeconds + (setCount - 1) * setRestSeconds;
+      prepareSeconds + sets * setSeconds + (sets - 1) * setRestSeconds;
 
-  /// 총 운동 시간(초) — 순수하게 운동하는 시간만
-  int get pureWorkSeconds => setCount * exerciseCount * workSeconds;
+  /// 순수 운동 시간(초)
+  int get pureWorkSeconds => sets * rounds * workSeconds;
+
+  /// 전체 라운드 수(세트 포함)
+  int get totalRounds => sets * rounds;
 
   List<Phase> buildPhases() {
     final phases = <Phase>[];
 
-    if (prepareSeconds > 0) {
-      phases.add(
-        Phase(
-          type: PhaseType.prepare,
-          duration: prepareSeconds,
-          setIndex: 1,
-          exerciseIndex: 0,
-          totalSets: setCount,
-          totalExercises: exerciseCount,
-        ),
-      );
-    }
+    phases.add(
+      Phase(
+        type: PhaseType.prepare,
+        duration: prepareSeconds,
+        setIndex: 1,
+        roundIndex: 0,
+        totalSets: sets,
+        totalRounds: rounds,
+      ),
+    );
 
-    for (var s = 1; s <= setCount; s++) {
-      for (var e = 1; e <= exerciseCount; e++) {
+    for (var s = 1; s <= sets; s++) {
+      for (var r = 1; r <= rounds; r++) {
         phases.add(
           Phase(
             type: PhaseType.work,
             duration: workSeconds,
             setIndex: s,
-            exerciseIndex: e,
-            totalSets: setCount,
-            totalExercises: exerciseCount,
+            roundIndex: r,
+            totalSets: sets,
+            totalRounds: rounds,
           ),
         );
-        if (e < exerciseCount && restSeconds > 0) {
+        final isLastRoundOfSet = r == rounds;
+        if (!isLastRoundOfSet && restSeconds > 0) {
           phases.add(
             Phase(
               type: PhaseType.rest,
               duration: restSeconds,
               setIndex: s,
-              exerciseIndex: e,
-              totalSets: setCount,
-              totalExercises: exerciseCount,
+              roundIndex: r,
+              totalSets: sets,
+              totalRounds: rounds,
             ),
           );
         }
-      }
-      if (s < setCount && setRestSeconds > 0) {
-        phases.add(
-          Phase(
-            type: PhaseType.setRest,
-            duration: setRestSeconds,
-            setIndex: s,
-            exerciseIndex: 0,
-            totalSets: setCount,
-            totalExercises: exerciseCount,
-          ),
-        );
+        if (isLastRoundOfSet && s < sets && setRestSeconds > 0) {
+          phases.add(
+            Phase(
+              type: PhaseType.setRest,
+              duration: setRestSeconds,
+              setIndex: s,
+              roundIndex: r,
+              totalSets: sets,
+              totalRounds: rounds,
+            ),
+          );
+        }
       }
     }
     return phases;
@@ -130,12 +137,11 @@ class TabataConfig {
   Map<String, dynamic> toJson() => {
     'workSeconds': workSeconds,
     'restSeconds': restSeconds,
-    'exerciseCount': exerciseCount,
-    'setCount': setCount,
-    'setRestMinutes': setRestMinutes,
-    'prepareSeconds': prepareSeconds,
-    'soundEnabled': soundEnabled,
-    'vibrationEnabled': vibrationEnabled,
+    'rounds': rounds,
+    'sets': sets,
+    'setRestSeconds': setRestSeconds,
+    'voiceEnabled': voiceEnabled,
+    'sfxEnabled': sfxEnabled,
   };
 
   factory TabataConfig.fromJson(Map<String, dynamic> json) {
@@ -152,14 +158,13 @@ class TabataConfig {
     }
 
     return TabataConfig(
-      workSeconds: readInt('workSeconds', 20),
-      restSeconds: readInt('restSeconds', 10),
-      exerciseCount: readInt('exerciseCount', 8),
-      setCount: readInt('setCount', 1),
-      setRestMinutes: readInt('setRestMinutes', 2),
-      prepareSeconds: readInt('prepareSeconds', 10),
-      soundEnabled: readBool('soundEnabled', true),
-      vibrationEnabled: readBool('vibrationEnabled', true),
+      workSeconds: readInt('workSeconds', 30).clamp(5, 3600),
+      restSeconds: readInt('restSeconds', 15).clamp(0, 3600),
+      rounds: readInt('rounds', 8).clamp(1, 99),
+      sets: readInt('sets', 1).clamp(1, 20),
+      setRestSeconds: readInt('setRestSeconds', 60).clamp(0, 3600),
+      voiceEnabled: readBool('voiceEnabled', true),
+      sfxEnabled: readBool('sfxEnabled', true),
     );
   }
 }

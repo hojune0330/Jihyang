@@ -6,9 +6,9 @@ class Phase {
     required this.type,
     required this.duration,
     required this.setIndex,
-    required this.exerciseIndex,
+    required this.roundIndex,
     required this.totalSets,
-    required this.totalExercises,
+    required this.totalRounds,
   });
 
   /// 구간 종류
@@ -17,33 +17,35 @@ class Phase {
   /// 구간 길이(초)
   final int duration;
 
-  /// 현재 세트 번호 (1부터)
+  /// 현재 세트 (1부터)
   final int setIndex;
 
-  /// 현재 운동 번호 (1부터, 세트 휴식에서는 0)
-  final int exerciseIndex;
+  /// 세트 안의 현재 라운드 (1부터, 준비/세트휴식은 1)
+  final int roundIndex;
 
   final int totalSets;
-  final int totalExercises;
+
+  /// 한 세트의 라운드 수
+  final int totalRounds;
 
   bool get isWorkout => type == PhaseType.work;
-
   bool get isRest => type == PhaseType.rest || type == PhaseType.setRest;
 
-  /// 카운트다운 사운드를 울리는 구간 (운동 / 휴식)
-  bool get needsCountdown => type != PhaseType.prepare;
+  /// 5초 카운트다운 + 음성 안내를 하는 구간
+  bool get hasCountdown => type == PhaseType.work || type == PhaseType.rest;
 
   String get title => switch (type) {
     PhaseType.prepare => '준비',
-    PhaseType.work => '운동 중',
+    PhaseType.work => '운동',
     PhaseType.rest => '휴식',
     PhaseType.setRest => '세트 휴식',
   };
 
-  String get subtitle => switch (type) {
-    PhaseType.prepare => '곧 시작합니다',
-    PhaseType.work => '$setIndex세트 · $exerciseIndex / $totalExercises개',
-    PhaseType.rest => '다음 운동 준비',
-    PhaseType.setRest => '다음은 ${setIndex + 1}세트',
+  /// 화면에 크게 표시되는 이름
+  String get bigTitle => switch (type) {
+    PhaseType.prepare => '준비',
+    PhaseType.work => '운동 중',
+    PhaseType.rest => '휴식',
+    PhaseType.setRest => '세트 휴식',
   };
 }

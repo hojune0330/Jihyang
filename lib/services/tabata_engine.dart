@@ -4,15 +4,15 @@ import 'package:flutter/foundation.dart';
 
 import '../models/phase.dart';
 import '../models/tabata_config.dart';
-import 'sound_service.dart';
+import 'audio_coach.dart';
 
 enum EngineStatus { idle, running, paused, finished }
 
 /// 벽시계(DateTime) 기반 타바타 엔진.
 ///
-/// 남은 시간을 "타이머 틱 누적"이 아니라 `현재시각 - 구간시작시각`으로 계산하기 때문에
-/// 화면이 꺼지거나 다른 앱으로 이동해 프레임이 멈춰도 시간이 틀어지지 않는다.
-/// 일시정지 시점의 경과 시간을 보존했다가 재개하면 이어서 계산한다.
+/// 남은 시간을 틱 누적이 아니라 `현재시각 - 구간시작시각`으로 계산하므로
+/// 화면 갱신이 늦거나 프레임이 멈춰도 시간이 틀어지지 않는다.
+/// 구간 전환 시 초과분(overshoot)을 다음 구간으로 이월해 시간 손실/중복을 없앤다.
 class TabataEngine extends ChangeNotifier {
   TabataEngine({TabataConfig? config})
     : _config = config ?? const TabataConfig() {
@@ -23,6 +23,8 @@ class TabataEngine extends ChangeNotifier {
   TabataConfig get config => _config;
 
   final List<Phase> _phases = <Phase>[];
+
+  /// 완료 화면에서 사용할 스냅샷 (phases를 리셋해도 유지)
   List<Phase> get phases => List.unmodifiable(_phases);
 
   int _index = 0;
@@ -38,16 +40,36 @@ class TabataEngine extends ChangeNotifier {
 
   Timer? _ticker;
 
-  /// 현재 구간이 시작된 벽시계 시각 (일시정지 중에는 null)
+  /// 현재 구간 시작 시각 (일시정지 중에는 null)
   DateTime? _phaseStartWall;
 
-  /// 현재 구간에서 이미 흘러간 시간(ms) — 일시정지 누적분 + 재개 오프셋
-  int _elapsedBeforeStart = 0;
-
-  /// 직전에 안내한 남은 초 (카운트다운 중복 재생 방지)
-  int _lastAnnouncedSecond = -1;
+  /// 현재 구간에서 이미 소비한 시간(ms) — 일시정지 누적분
+  int _elapsedInPhaseMs = 0;
 
   int _remainingMs = 0;
+
+  /// 이미 안내한 카운트다운 숫자 (중복 방지)
+  final Set<int> _announcedCounts = <int>{};
+
+  /// 완료 통계
+  int _completedRounds = 0;
+  int _completedSets = 0;
+  int _elapsedTotalMs = 0;
+  DateTime? _sessionStartWall;
+
+  int get completedRounds => _completedRounds;
+  int get completedSets => _completedSets;
+
+  /// 실제로 흐른 총 시간(ms) — 완료 화면에서 사용
+  int get elapsedTotalMs {
+    if (_status == EngineStatus.finished) return _elapsedTotalMs;
+    final start = _sessionStartWall;
+    if (start == null) return 0;
+    if (_status == EngineStatus.running) {
+      return DateTime.now().difference(start).inMilliseconds;
+    }
+    return _elapsedTotalMs;
+  }
 
   Phase? get currentPhase =>
       (_index >= 0 && _index < _phases.length) ? _phases[_index] : null;
@@ -55,9 +77,10 @@ class TabataEngine extends ChangeNotifier {
   Phase? get nextPhase =>
       (_index + 1 < _phases.length) ? _phases[_index + 1] : null;
 
-  /// 현재 구간 경과 시간(ms)
-  int get _elapsedInPhase {
-    var base = _elapsedBeforeStart;
+  // --------------------------------------------------------- 시간 계산
+
+  int get _phaseElapsedMs {
+    var base = _elapsedInPhaseMs;
     final start = _phaseStartWall;
     if (_status == EngineStatus.running && start != null) {
       base += DateTime.now().difference(start).inMilliseconds;
@@ -65,7 +88,15 @@ class TabataEngine extends ChangeNotifier {
     return base;
   }
 
-  /// 남은 시간(초) — 0.3초 남아도 1초로 표시
+  /// 현재 구간 남은 시간(ms)
+  int get remainingMs {
+    final cur = currentPhase;
+    if (cur == null) return 0;
+    if (_status == EngineStatus.idle) return cur.duration * 1000;
+    return _remainingMs.clamp(0, cur.duration * 1000);
+  }
+
+  /// 남은 시간(초) — 0.05초 남아도 1초로 표시
   int get remainingSeconds {
     final cur = currentPhase;
     if (cur == null) return 0;
@@ -73,13 +104,7 @@ class TabataEngine extends ChangeNotifier {
     return (_remainingMs / 1000).ceil().clamp(0, cur.duration);
   }
 
-  /// 현재 구간 남은 시간(ms) — 알림 예약 등 외부에서 사용
-  int get remainingMs {
-    final cur = currentPhase;
-    if (cur == null) return 0;
-    if (_status == EngineStatus.idle) return cur.duration * 1000;
-    return _remainingMs.clamp(0, cur.duration * 1000);
-  }
+  int get totalSeconds => _phases.fold<int>(0, (a, p) => a + p.duration);
 
   int get remainingTotalSeconds {
     var remain = remainingSeconds;
@@ -89,112 +114,120 @@ class TabataEngine extends ChangeNotifier {
     return remain;
   }
 
-  int get totalSeconds => _phases.fold<int>(0, (a, p) => a + p.duration);
-
-  int get elapsedTotalSeconds {
-    if (_status == EngineStatus.idle) return 0;
+  double get totalProgress {
+    final total = totalSeconds;
+    if (total == 0) return 0;
+    if (_status == EngineStatus.finished) return 1;
     var elapsed = 0;
     for (var i = 0; i < _index && i < _phases.length; i++) {
       elapsed += _phases[i].duration;
     }
     final cur = currentPhase;
-    if (cur != null) {
-      elapsed += cur.duration - remainingSeconds;
-    }
-    return elapsed.clamp(0, totalSeconds);
+    if (cur != null) elapsed += cur.duration - remainingSeconds;
+    return (elapsed / total).clamp(0.0, 1.0);
   }
 
-  /// 전체 진행률 0~1
-  double get totalProgress {
-    final total = totalSeconds;
-    if (total == 0) return 0;
-    if (_status == EngineStatus.finished) return 1;
-    return (elapsedTotalSeconds / total).clamp(0.0, 1.0);
-  }
-
-  /// 현재 구간 진행률 0~1
-  double get phaseProgress {
-    final cur = currentPhase;
-    if (cur == null || cur.duration == 0) return 0;
-    return (1 - remainingSeconds / cur.duration).clamp(0.0, 1.0);
-  }
-
-  /// 현재 라운드 (1부터). 세트 휴식에서는 직전 라운드로 표시
+  /// 현재 라운드(세트 내)와 전체 라운드 번호
   int get currentRound {
     final cur = currentPhase;
     if (cur == null) return 1;
-    if (cur.type == PhaseType.setRest) return cur.totalExercises;
-    if (cur.type == PhaseType.rest) return cur.exerciseIndex;
-    return cur.exerciseIndex == 0 ? 1 : cur.exerciseIndex;
+    return cur.roundIndex == 0 ? 1 : cur.roundIndex;
   }
 
-  int get totalRounds {
+  int get totalRoundsPerSet {
     final cur = currentPhase;
-    return cur?.totalExercises ?? _config.exerciseCount;
+    return cur?.totalRounds ?? _config.rounds;
   }
 
   int get currentSet {
     final cur = currentPhase;
-    if (cur == null) return 1;
-    return cur.setIndex;
+    return cur?.setIndex ?? 1;
   }
 
-  int get totalSets => currentPhase?.totalSets ?? _config.setCount;
+  int get totalSets => currentPhase?.totalSets ?? _config.sets;
 
-  // ---------------------------------------------------------------- 제어
+  /// 세트를 합친 전체 라운드 번호
+  int get globalRound {
+    final cur = currentPhase;
+    if (cur == null) return 1;
+    final perSet = cur.totalRounds;
+    if (cur.type == PhaseType.prepare) return 1;
+    return (cur.setIndex - 1) * perSet + cur.roundIndex;
+  }
+
+  int get globalTotalRounds => _config.totalRounds;
+
+  String get phaseType => currentPhase?.type.name ?? 'prepare';
+
+  // --------------------------------------------------------- 제어
 
   void _rebuild() {
     _phases
       ..clear()
       ..addAll(_config.buildPhases());
     _index = 0;
-    _elapsedBeforeStart = 0;
+    _elapsedInPhaseMs = 0;
     _phaseStartWall = null;
-    _lastAnnouncedSecond = -1;
     _remainingMs = _phases.isEmpty ? 0 : _phases.first.duration * 1000;
+    _announcedCounts.clear();
+    _completedRounds = 0;
+    _completedSets = 0;
+    _elapsedTotalMs = 0;
+    _sessionStartWall = null;
   }
 
-  /// 설정 변경 — 진행 중이어도 새 설정으로 재구성해 즉시 반영
   void updateConfig(TabataConfig config) {
     _config = config;
-    _ticker?.cancel();
-    _ticker = null;
+    _stopTicker();
     _status = EngineStatus.idle;
     _rebuild();
     notifyListeners();
   }
 
   void reset() {
-    _ticker?.cancel();
-    _ticker = null;
+    _stopTicker();
     _status = EngineStatus.idle;
     _rebuild();
+    AudioCoach.instance.stopAll();
     notifyListeners();
   }
 
   void start() {
-    if (_phases.isEmpty) _rebuild();
+    // 완료 직후이거나 인덱스가 끝을 가리키면 구간을 처음부터 다시 만든다.
+    // (이 처리가 없으면 종료 후 재시작 시 곧바로 _finish()로 튕겨나간다)
+    if (_phases.isEmpty ||
+        _status == EngineStatus.finished ||
+        _index >= _phases.length) {
+      _rebuild();
+    }
     if (_phases.isEmpty) return;
-    if (_status == EngineStatus.finished) _rebuild();
 
     _status = EngineStatus.running;
     _phaseStartWall = DateTime.now();
-    _elapsedBeforeStart = 0;
-    _lastAnnouncedSecond = -1;
+    _sessionStartWall = DateTime.now();
+    _elapsedInPhaseMs = 0;
+    _elapsedTotalMs = 0;
     _remainingMs = (currentPhase?.duration ?? 0) * 1000;
+    _announcedCounts.clear();
+    _completedRounds = 0;
+    _completedSets = 0;
+
+    AudioCoach.instance.voiceEnabled = _config.voiceEnabled;
+    AudioCoach.instance.sfxEnabled = _config.sfxEnabled;
 
     _startTicker();
-    _announceStart(currentPhase);
+    _onPhaseEntered(currentPhase, isStart: true);
     notifyListeners();
   }
 
   void pause() {
     if (_status != EngineStatus.running) return;
-    _elapsedBeforeStart = _elapsedInPhase;
+    _elapsedInPhaseMs = _phaseElapsedMs;
+    _elapsedTotalMs = elapsedTotalMs;
     _phaseStartWall = null;
     _status = EngineStatus.paused;
-    _ticker?.cancel();
-    _ticker = null;
+    _stopTicker();
+    AudioCoach.instance.stopAll();
     notifyListeners();
   }
 
@@ -202,9 +235,14 @@ class TabataEngine extends ChangeNotifier {
     if (_status != EngineStatus.paused) return;
     _status = EngineStatus.running;
     _phaseStartWall = DateTime.now();
+    // 세션 시작 시각 보정 (일시정지 동안의 시간 제외)
+    if (_sessionStartWall != null) {
+      _sessionStartWall = DateTime.now().subtract(
+        Duration(milliseconds: _elapsedTotalMs),
+      );
+    }
     _startTicker();
-    // 재개 시점에 밀린 구간을 소리 없이 정리
-    _sync(allowSound: false);
+    _sync(allowAudio: false);
     notifyListeners();
   }
 
@@ -222,7 +260,10 @@ class TabataEngine extends ChangeNotifier {
 
   /// 다음 구간으로 건너뛰기
   void skip() {
-    if (_status == EngineStatus.idle) return;
+    if (_status != EngineStatus.running && _status != EngineStatus.paused) {
+      return;
+    }
+    AudioCoach.instance.stopAll();
     _advanceTo(_index + 1, carryMs: 0, announce: false);
     if (_status == EngineStatus.running) {
       _phaseStartWall = DateTime.now();
@@ -231,125 +272,155 @@ class TabataEngine extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 앱이 포그라운드로 돌아왔을 때 호출 — 밀린 구간을 즉시 반영
+  /// 앱 복귀 시 밀린 구간 정산
   void catchUp() {
     if (_status != EngineStatus.running) return;
-    _sync(allowSound: false);
+    _sync(allowAudio: true, isCatchUp: true);
     notifyListeners();
   }
 
-  // ---------------------------------------------------------------- 내부
+  // --------------------------------------------------------- 내부
 
   void _startTicker() {
-    _ticker?.cancel();
-    // 250ms: 화면 갱신 부드러움과 배터리 소모의 균형
-    _ticker = Timer.periodic(const Duration(milliseconds: 250), (_) => _sync());
+    _stopTicker();
+    _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) => _sync());
   }
 
-  void _sync({bool allowSound = true}) {
-    if (_status != EngineStatus.running) return;
-    if (_phases.isEmpty) return;
+  void _stopTicker() {
+    _ticker?.cancel();
+    _ticker = null;
+  }
+
+  void _sync({bool allowAudio = true, bool isCatchUp = false}) {
+    if (_status != EngineStatus.running || _phases.isEmpty) return;
 
     var guard = 0;
-    while (guard++ < 2000) {
+    while (guard++ < 5000) {
       final cur = currentPhase;
       if (cur == null) return;
 
-      final elapsed = _elapsedInPhase;
-      final durationMs = cur.duration * 1000;
-      final remain = durationMs - elapsed;
+      final remain = cur.duration * 1000 - _phaseElapsedMs;
 
       if (remain > 0) {
         _remainingMs = remain;
-        _handleCountdown(cur, remain, allowSound: allowSound);
+        if (allowAudio) _handleCountdown(cur, remain);
         notifyListeners();
         return;
       }
 
-      // 구간 종료 → 다음 구간으로 (초과분 이월)
+      // 구간 초과분을 다음 구간으로 이월 (시간 손실/중복 방지)
       final carry = -remain;
-      if (allowSound && _config.soundEnabled) {
-        SoundService.instance.phaseEnd();
+      if (carry >= cur.duration * 1000) {
+        // 구간을 통째로 건너뛰는 경우 carry는 잘라서 무한 루프 방지
       }
-      if (allowSound && _config.vibrationEnabled) {
-        SoundService.instance.vibrate();
-      }
-      _advanceTo(_index + 1, carryMs: carry, announce: allowSound);
+      _advanceTo(
+        _index + 1,
+        carryMs: carry,
+        announce: !isCatchUp || carry < 1000,
+      );
       if (_status != EngineStatus.running) return;
     }
   }
 
   void _advanceTo(int nextIndex, {required int carryMs, bool announce = true}) {
+    final prev = currentPhase;
+
+    // 통계 반영
+    if (prev != null && prev.type == PhaseType.work) {
+      _completedRounds += 1;
+    }
+    if (prev != null && prev.type == PhaseType.setRest) {
+      _completedSets = prev.setIndex;
+    }
+
     _index = nextIndex;
-    _elapsedBeforeStart = carryMs < 0 ? 0 : carryMs;
-    _lastAnnouncedSecond = -1;
-    _phaseStartWall = _status == EngineStatus.running ? DateTime.now() : null;
+    _announcedCounts.clear();
 
     if (_index >= _phases.length) {
       _finish();
       return;
     }
-    _remainingMs = (_phases[_index].duration * 1000 - _elapsedBeforeStart)
-        .clamp(0, 1 << 31);
-    if (announce) _announceStart(_phases[_index]);
+
+    final next = _phases[_index];
+    _elapsedInPhaseMs = carryMs < 0 ? 0 : carryMs;
+    _phaseStartWall = _status == EngineStatus.running ? DateTime.now() : null;
+    _remainingMs = (next.duration * 1000 - _elapsedInPhaseMs).clamp(0, 1 << 31);
+
+    if (announce) _onPhaseEntered(next, isStart: false);
   }
 
-  void _announceStart(Phase? phase) {
-    if (phase == null || !_config.soundEnabled) return;
+  void _onPhaseEntered(Phase? phase, {required bool isStart}) {
+    if (phase == null) return;
+    final coach = AudioCoach.instance;
+    coach.voiceEnabled = _config.voiceEnabled;
+    coach.sfxEnabled = _config.sfxEnabled;
+
     switch (phase.type) {
-      case PhaseType.work:
-        SoundService.instance.workStart();
-      case PhaseType.rest:
-      case PhaseType.setRest:
-        SoundService.instance.restStart();
       case PhaseType.prepare:
         break;
+      case PhaseType.work:
+        coach.announceWorkStart(
+          round: phase.roundIndex,
+          totalRounds: phase.totalRounds,
+          set: phase.setIndex,
+          totalSets: phase.totalSets,
+        );
+        if (_config.voiceEnabled) coach.vibrate();
+      case PhaseType.rest:
+        coach.announceRestStart(seconds: phase.duration);
+      case PhaseType.setRest:
+        coach.announceSetRestStart(
+          seconds: phase.duration,
+          nextSet: phase.setIndex + 1,
+        );
     }
-    if (_config.vibrationEnabled) SoundService.instance.vibrate();
   }
 
-  void _handleCountdown(Phase phase, int remainMs, {required bool allowSound}) {
-    if (!phase.needsCountdown) return;
+  void _handleCountdown(Phase phase, int remainMs) {
+    if (!phase.hasCountdown) return;
     final secs = (remainMs / 1000).ceil();
     if (secs > 5 || secs < 1) return;
-    if (secs == _lastAnnouncedSecond) return;
-    _lastAnnouncedSecond = secs;
-    if (allowSound && _config.soundEnabled) {
-      SoundService.instance.countdownBeep();
-    }
-    if (allowSound && _config.vibrationEnabled && secs <= 3) {
-      SoundService.instance.vibrate();
+    if (_announcedCounts.contains(secs)) return;
+    _announcedCounts.add(secs);
+    AudioCoach.instance.sayCount(secs);
+    if (AudioCoach.instance.voiceEnabled && secs <= 2) {
+      AudioCoach.instance.vibrate();
     }
   }
 
   void _finish() {
-    _ticker?.cancel();
-    _ticker = null;
-    _phaseStartWall = null;
+    _stopTicker();
+    _elapsedTotalMs = elapsedTotalMs;
     _status = EngineStatus.finished;
     _remainingMs = 0;
-    _elapsedBeforeStart = 0;
-    if (_config.soundEnabled) SoundService.instance.finish();
-    if (_config.vibrationEnabled) SoundService.instance.vibrate(heavy: true);
+    _elapsedInPhaseMs = 0;
+    _phaseStartWall = null;
+    if (_completedSets == 0) {
+      _completedSets = _config.sets;
+    }
+    _completedRounds = _config.sets * _config.rounds;
+    AudioCoach.instance.announceFinish(
+      sets: _config.sets,
+      rounds: _config.rounds,
+    );
     notifyListeners();
   }
 
-  // ------------------------------------------------- 스냅샷(백그라운드 복원)
+  // --------------------------------------------------------- 스냅샷
 
-  /// 현재 진행 상황을 저장용 맵으로 직렬화
-  Map<String, dynamic> snapshot() {
-    return {
-      'status': _status.name,
-      'index': _index,
-      'elapsedBeforeStart': _status == EngineStatus.running
-          ? _elapsedInPhase
-          : _elapsedBeforeStart,
-      'savedAt': DateTime.now().millisecondsSinceEpoch,
-      'config': _config.toJson(),
-    };
-  }
+  Map<String, dynamic> snapshot() => {
+    'status': _status.name,
+    'index': _index,
+    'elapsedInPhaseMs': _status == EngineStatus.running
+        ? _phaseElapsedMs
+        : _elapsedInPhaseMs,
+    'elapsedTotalMs': elapsedTotalMs,
+    'completedRounds': _completedRounds,
+    'completedSets': _completedSets,
+    'savedAt': DateTime.now().millisecondsSinceEpoch,
+    'config': _config.toJson(),
+  };
 
-  /// 저장된 스냅샷으로 복원. 앱이 종료되어도 남은 시간이 이어진다.
   void restoreFromSnapshot(Map<String, dynamic> snap) {
     try {
       final configJson = snap['config'];
@@ -358,65 +429,70 @@ class TabataEngine extends ChangeNotifier {
       }
       _rebuild();
 
-      final savedIndex = snap['index'];
-      final savedElapsed = snap['elapsedBeforeStart'];
-      final savedAt = snap['savedAt'];
       final savedStatus = snap['status'];
+      final savedIndex = snap['index'];
+      final savedElapsed = snap['elapsedInPhaseMs'];
+      final savedAt = snap['savedAt'];
+      final savedTotal = snap['elapsedTotalMs'];
 
+      if (savedStatus != 'running' && savedStatus != 'paused') return;
       if (savedIndex is! int ||
           savedIndex < 0 ||
           savedIndex >= _phases.length) {
         return;
       }
-      if (savedStatus != 'running' && savedStatus != 'paused') return;
 
       _index = savedIndex;
       var elapsed = savedElapsed is int ? savedElapsed : 0;
+      final gap = savedStatus == 'running' && savedAt is int
+          ? DateTime.now().millisecondsSinceEpoch - savedAt
+          : 0;
+      if (gap > 0) elapsed += gap;
 
-      // 종료돼 있던 시간만큼 진행시킨다 (벽시계 기준)
-      if (savedStatus == 'running' && savedAt is int) {
-        final gap = DateTime.now().millisecondsSinceEpoch - savedAt;
-        if (gap > 0) elapsed += gap;
-      }
-
-      // 밀린 구간을 소리 없이 정산
+      // 밀린 구간 정산
       var guard = 0;
-      while (guard++ < 2000 && _index < _phases.length) {
+      while (guard++ < 5000 && _index < _phases.length) {
         final durationMs = _phases[_index].duration * 1000;
         if (elapsed < durationMs) break;
         elapsed -= durationMs;
+        if (_phases[_index].type == PhaseType.work) _completedRounds++;
         _index++;
       }
+
       if (_index >= _phases.length) {
         _index = _phases.length - 1;
-        _elapsedBeforeStart = _phases[_index].duration * 1000;
-        _remainingMs = 0;
         _status = EngineStatus.idle;
         return;
       }
 
-      _elapsedBeforeStart = elapsed < 0 ? 0 : elapsed;
-      _remainingMs = (_phases[_index].duration * 1000 - _elapsedBeforeStart)
-          .clamp(0, 1 << 31);
-      _lastAnnouncedSecond = -1;
-      _phaseStartWall = null;
+      _elapsedInPhaseMs = elapsed.clamp(0, _phases[_index].duration * 1000);
+      _remainingMs = _phases[_index].duration * 1000 - _elapsedInPhaseMs;
+      final completed = snap['completedRounds'];
+      if (completed is int) _completedRounds = completed;
+      final setsDone = snap['completedSets'];
+      if (setsDone is int) _completedSets = setsDone;
+      _elapsedTotalMs = savedTotal is int ? savedTotal + gap : 0;
 
       if (savedStatus == 'running') {
         _status = EngineStatus.running;
         _phaseStartWall = DateTime.now();
+        _sessionStartWall = DateTime.now().subtract(
+          Duration(milliseconds: _elapsedTotalMs),
+        );
         _startTicker();
       } else {
         _status = EngineStatus.paused;
+        _phaseStartWall = null;
       }
       notifyListeners();
     } catch (e) {
-      if (kDebugMode) debugPrint('snapshot restore failed: $e');
+      if (kDebugMode) debugPrint('restore failed: $e');
     }
   }
 
   @override
   void dispose() {
-    _ticker?.cancel();
+    _stopTicker();
     super.dispose();
   }
 }
