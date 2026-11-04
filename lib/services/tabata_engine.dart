@@ -427,23 +427,38 @@ class TabataEngine extends ChangeNotifier {
     final elapsed = elapsedInPhaseMs;
 
     // --- 마지막 5초 카운트다운 (모든 시간 구간) -----------------
+    //
+    // [중요] 초마다 다른 파일을 재생하면 파일 교체마다 stop/seek/resume 이
+    // 일어나 '뚝뚝' 끊긴다. 그래서 5·4·3·2·1 이 1초 간격으로 미리 녹음된
+    // **묶음 파일 하나**를 '가장 먼저 울릴 숫자' 지점부터 한 번만 재생한다.
+    // 숫자 사이 간격은 파일에 새겨져 있으므로 흔들릴 수 없다.
+    //
+    // 음성 안내를 껐을 때는 묶음 대신 매초 '틱'(sfx_count)을 그대로 쓴다.
     if (cur.hasCountdown) {
+      int? firstPlayable;
+      for (var n = 5; n >= 1; n--) {
+        final atMs = durationMs - n * 1000;
+        final delayMs = atMs - elapsed;
+        if (atMs < _announceGuardMs) continue;
+        if (delayMs < -250) continue;
+        firstPlayable = n;
+      }
+
       for (var n = 5; n >= 1; n--) {
         if (_announced.contains(n)) continue;
         final atMs = durationMs - n * 1000;
         final delayMs = atMs - elapsed;
 
-        // 구간 시작 안내(효과음+음성)와 겹치는 숫자는 생략한다.
-        // 예) 5초 운동 + 남성 목소리 → 안내 약 1.3초 → 5·4·3 생략, 2·1 안내
         if (atMs < _announceGuardMs) {
           _announced.add(n);
           continue;
         }
         if (delayMs < -250) {
-          // 이미 지난 숫자(복귀 직후 등)는 건너뛴다 — 몰아서 재생하지 않는다.
           _announced.add(n);
           continue;
         }
+        // 묶음 재생에서는 가장 앞 숫자만 실제 재생을 시작한다.
+        final startsBundle = (n == firstPlayable);
         _scheduleAt(
           start.add(Duration(milliseconds: atMs)),
           delayMs < 0 ? 0 : delayMs,
@@ -454,7 +469,14 @@ class TabataEngine extends ChangeNotifier {
             if (currentPhase != cur) return;
             if (_announced.contains(n)) return;
             _announced.add(n);
-            if (audioOutputEnabled) AudioCoach.instance.playCount(n);
+            if (!audioOutputEnabled) return;
+            if (!AudioCoach.instance.voiceEnabled) {
+              // 음성 꺼짐 → 매초 또렷한 틱
+              AudioCoach.instance.playSfx(Sfx.count);
+            } else if (startsBundle) {
+              // 묶음 파일 1회 재생 (이후 숫자는 파일 안에서 이어짐)
+              AudioCoach.instance.playCountBundle(fromNumber: n);
+            }
           },
         );
       }
@@ -644,14 +666,8 @@ class TabataEngine extends ChangeNotifier {
     _completedSets = _config.sets;
     _completedRounds = _config.sets * _config.rounds;
     if (audioOutputEnabled) {
-      // 종료도 '구간 전환'과 동일한 순서(효과음 → 음성)로 안내한다.
-      AudioCoach.instance.announce(
-        const AnnouncePlan(
-          sfx: Sfx.finish,
-          voices: [StateVoice.finish],
-        ),
-        phaseType: 'finished',
-      );
+      // 종료도 '구간 전환'과 동일한 순서로 안내한다.
+      AudioCoach.instance.announce(finishPlan, phaseType: 'finished');
     }
     notifyListeners();
   }
