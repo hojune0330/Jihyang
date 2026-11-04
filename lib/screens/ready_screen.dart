@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../models/tabata_config.dart';
 import '../theme/app_theme.dart';
 
-/// 화면 1 — 운동 시작 전 준비 화면
+/// 화면 1 — 운동 시작 전 메인 화면
+///
+/// 한눈에: 운동 시간 / 휴식 시간 / 라운드 / 세트 / 세트 간 휴식 / 총 소요 시간
+/// 진행 화면과 **같은 색 체계**를 쓴다 (운동=코랄, 휴식=블루, 준비=옐로).
 class ReadyScreen extends StatelessWidget {
   const ReadyScreen({
     super.key,
@@ -29,12 +32,18 @@ class ReadyScreen extends StatelessWidget {
           children: [
             _topBar(),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [if (hasSavedSession) _resumeBanner(), _summary()],
+                  children: [
+                    if (hasSavedSession) _resumeBanner(),
+                    _timeCards(),
+                    const SizedBox(height: 12),
+                    _progressCards(),
+                    const SizedBox(height: 12),
+                    _totalCard(),
+                  ],
                 ),
               ),
             ),
@@ -47,7 +56,7 @@ class ReadyScreen extends StatelessWidget {
 
   Widget _topBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 14, 12, 0),
+      padding: const EdgeInsets.fromLTRB(20, 10, 8, 0),
       child: Row(
         children: [
           const Text(
@@ -62,7 +71,7 @@ class ReadyScreen extends StatelessWidget {
           const Spacer(),
           IconButton(
             onPressed: onOpenSettings,
-            iconSize: 26,
+            iconSize: 25,
             tooltip: '설정',
             icon: const Icon(
               Icons.settings_outlined,
@@ -76,12 +85,12 @@ class ReadyScreen extends StatelessWidget {
 
   Widget _resumeBanner() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.only(top: 8, bottom: 12),
       child: InkWell(
         onTap: onResumeSession,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: AppColors.surfaceHigh,
             borderRadius: BorderRadius.circular(12),
@@ -90,23 +99,23 @@ class ReadyScreen extends StatelessWidget {
             children: [
               const Icon(
                 Icons.play_circle_outline,
-                size: 20,
+                size: 19,
                 color: AppColors.prepare,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 9),
               const Expanded(
                 child: Text(
                   '진행 중이던 운동 이어서 하기',
                   style: TextStyle(
-                    fontSize: 13.5,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary,
                   ),
                 ),
               ),
-              Icon(
+              const Icon(
                 Icons.chevron_right,
-                size: 20,
+                size: 19,
                 color: AppColors.textTertiary,
               ),
             ],
@@ -116,125 +125,94 @@ class ReadyScreen extends StatelessWidget {
     );
   }
 
-  Widget _summary() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+  /// 운동 / 휴식 — 진행 화면과 동일한 색을 그대로 쓰는 독립 카드
+  Widget _timeCards() {
+    return Row(
       children: [
-        // 가장 궁금한 두 값(운동/휴식)을 크게 — 한눈에 확인
-        Row(
-          children: [
-            Expanded(
-              child: _bigTile(
-                label: '운동',
-                value: _hms(config.workSeconds),
-                color: AppColors.work,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _bigTile(
-                label: '휴식',
-                value: _hms(config.restSeconds),
-                color: AppColors.rest,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(14),
+        Expanded(
+          child: _TimeCard(
+            label: '운동 시간',
+            accent: AppColors.work,
+            value: _hms(config.workSeconds),
           ),
-          child: Column(
-            children: [
-              _row(
-                '라운드',
-                config.sets > 1
-                    ? '${config.rounds}회 × ${config.sets}세트'
-                    : '${config.rounds}회',
-                AppColors.prepare,
-              ),
-              const Divider(color: AppColors.divider, height: 1),
-              _row(
-                '세트 간 휴식',
-                config.sets > 1 ? _hms(config.setRestSeconds) : '없음',
-                config.sets > 1 ? AppColors.rest : AppColors.textTertiary,
-              ),
-              const Divider(color: AppColors.divider, height: 1),
-              _row('총 소요 시간', _longDuration(config.totalSeconds), AppColors.textPrimary),
-            ],
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: _TimeCard(
+            label: '휴식 시간',
+            accent: AppColors.rest,
+            value: config.restSeconds == 0 ? '없음' : _hms(config.restSeconds),
           ),
         ),
       ],
     );
   }
 
-  Widget _bigTile({
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-            ),
+  /// 라운드 / 세트 — 단순 텍스트가 아니라 구분된 영역
+  Widget _progressCards() {
+    final showSetRest = config.sets > 1;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: _CountCard(
+            label: '라운드',
+            value: '${config.rounds}',
+            unit: '회',
+            accent: AppColors.prepare,
           ),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              maxLines: 1,
-              style: TextStyle(
-                color: color,
-                fontSize: 27,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.6,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: _CountCard(
+            label: '세트',
+            value: '${config.sets}',
+            unit: '세트',
+            accent: AppColors.textPrimary,
+          ),
+        ),
+        if (showSetRest) ...[
+          const SizedBox(width: 11),
+          Expanded(
+            child: _CountCard(
+              label: '세트 간 휴식',
+              value: _compact(config.setRestSeconds),
+              unit: '',
+              accent: AppColors.rest,
+              dense: true,
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 
-  Widget _row(String label, String value, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
+  Widget _totalCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
         children: [
-          Text(
-            label,
-            style: const TextStyle(
+          const Text(
+            '총 소요 시간',
+            style: TextStyle(
               color: AppColors.textSecondary,
               fontSize: 13,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const Spacer(),
           Text(
-            value,
-            style: TextStyle(
-              color: color,
-              fontSize: 19,
+            _longDuration(config.totalSeconds),
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 21,
               fontWeight: FontWeight.w800,
-              fontFeatures: const [FontFeature.tabularFigures()],
+              letterSpacing: -0.4,
+              fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -244,15 +222,15 @@ class ReadyScreen extends StatelessWidget {
 
   Widget _startArea() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 8, 22, 22),
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
       child: SizedBox(
-        height: 72,
+        height: 68,
         width: double.infinity,
         child: FilledButton(
           onPressed: onStart,
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.work,
-            foregroundColor: Colors.black,
+            foregroundColor: AppColors.ink,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),
@@ -260,14 +238,15 @@ class ReadyScreen extends StatelessWidget {
           child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.play_arrow_rounded, size: 32),
-              SizedBox(width: 6),
+              Icon(Icons.play_arrow_rounded, size: 30, color: AppColors.ink),
+              SizedBox(width: 5),
               Text(
                 '운동 시작',
                 style: TextStyle(
-                  fontSize: 21,
+                  fontSize: 20,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -0.3,
+                  color: AppColors.ink,
                 ),
               ),
             ],
@@ -280,7 +259,15 @@ class ReadyScreen extends StatelessWidget {
   String _hms(int seconds) {
     final m = seconds ~/ 60;
     final s = seconds % 60;
-    return '${m.toString().padLeft(2, '0')}분 ${s.toString().padLeft(2, '0')}초';
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  String _compact(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    if (m > 0 && s > 0) return '$m분$s초';
+    if (m > 0) return '$m분';
+    return '$s초';
   }
 
   String _longDuration(int total) {
@@ -290,6 +277,148 @@ class ReadyScreen extends StatelessWidget {
     if (h > 0) {
       return '$h시간 ${m.toString().padLeft(2, '0')}분';
     }
-    return '${m.toString().padLeft(2, '0')}분 ${s.toString().padLeft(2, '0')}초';
+    return '$m분 ${s.toString().padLeft(2, '0')}초';
+  }
+}
+
+/// 운동/휴식 시간 카드 — 왼쪽에 상태 색 띠를 두어 진행 화면과 연결감을 준다.
+class _TimeCard extends StatelessWidget {
+  const _TimeCard({
+    required this.label,
+    required this.accent,
+    required this.value,
+  });
+
+  final String label;
+  final Color accent;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.tinted(accent),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: accent.withValues(alpha: 0.5), width: 1.2),
+      ),
+      padding: const EdgeInsets.fromLTRB(13, 11, 13, 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 7,
+                height: 7,
+                decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 30,
+                height: 1.0,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.8,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 라운드 / 세트 수 카드
+class _CountCard extends StatelessWidget {
+  const _CountCard({
+    required this.label,
+    required this.value,
+    required this.unit,
+    required this.accent,
+    this.dense = false,
+  });
+
+  final String label;
+  final String value;
+  final String unit;
+  final Color accent;
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(13, 11, 13, 13),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(height: 7),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: dense ? 22 : 30,
+                    height: 1.0,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.6,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                if (unit.isNotEmpty)
+                  Text(
+                    ' $unit',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

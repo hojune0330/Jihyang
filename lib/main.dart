@@ -116,6 +116,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         rounds: 3,
         sets: 2,
         setRestSeconds: 4,
+        soundEnabled: true,
         voiceEnabled: true,
         sfxEnabled: false,
       );
@@ -224,13 +225,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _engine.updateConfig(result);
     await ConfigStore.save(result);
     NotificationService.instance.cancelAll();
-    AudioCoach.instance.voiceEnabled = result.voiceEnabled;
-    AudioCoach.instance.sfxEnabled = result.sfxEnabled;
+    _applyAudio();
+  }
+
+  void _applyAudio() {
+    final c = AudioCoach.instance;
+    c.soundEnabled = _config.soundEnabled;
+    c.voiceEnabled = _config.voiceEnabled;
+    c.sfxEnabled = _config.sfxEnabled;
   }
 
   void _start() {
-    AudioCoach.instance.voiceEnabled = _config.voiceEnabled;
-    AudioCoach.instance.sfxEnabled = _config.sfxEnabled;
+    _applyAudio();
     _engine.start();
     NotificationService.instance.scheduleSession(_engine);
   }
@@ -374,7 +380,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         );
       case AppScreen.finished:
         return FinishedScreen(
-          sets: _engine.isFinished ? _config.sets : _engine.completedSets,
+          sets: _engine.completedSets,
           totalSets: _config.sets,
           rounds: _config.totalRounds,
           totalRounds: _config.totalRounds,

@@ -57,7 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: const Text(
                 '저장',
                 style: TextStyle(
-                  color: AppColors.work,
+                  color: AppColors.prepare,
                   fontSize: 16,
                   fontWeight: FontWeight.w900,
                 ),
@@ -113,24 +113,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 allowZero: true,
                 onChanged: (v) => _update(_c.copyWith(setRestSeconds: v)),
               ),
+            ] else ...[
+              const SizedBox(height: 8),
+              Text(
+                '세트가 1개면 세트 간 휴식은 사용되지 않습니다.',
+                style: TextStyle(
+                  color: AppColors.textTertiary.withValues(alpha: 0.9),
+                  fontSize: 11.5,
+                ),
+              ),
             ],
-            const SizedBox(height: 26),
-            const Divider(color: AppColors.divider, height: 1),
-            const SizedBox(height: 8),
+            const SizedBox(height: 24),
+            const _SectionLabel('사운드'),
+            const SizedBox(height: 4),
             _switchRow(
-              label: '음성 안내',
-              subtitle: '운동·휴식 안내와 5초 카운트다운 음성',
+              label: '전체 사운드',
+              subtitle: '끄면 음성·효과음이 모두 나오지 않습니다',
+              value: _c.soundEnabled,
+              accent: AppColors.textPrimary,
+              onChanged: (v) => _update(_c.copyWith(soundEnabled: v)),
+            ),
+            const SizedBox(height: 2),
+            _switchRow(
+              label: '음성 카운트다운',
+              subtitle: '마지막 5초 5·4·3·2·1 음성 안내',
               value: _c.voiceEnabled,
               accent: AppColors.prepare,
+              enabled: _c.soundEnabled,
               onChanged: (v) => _update(_c.copyWith(voiceEnabled: v)),
             ),
             _switchRow(
               label: '효과음',
-              subtitle: '시작·전환·완료 알림음',
+              subtitle: '운동·휴식 시작, 세트 휴식, 완료 알림음',
               value: _c.sfxEnabled,
               accent: AppColors.work,
+              enabled: _c.soundEnabled,
               onChanged: (v) => _update(_c.copyWith(sfxEnabled: v)),
             ),
+            if (!_c.soundEnabled) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    size: 15,
+                    color: AppColors.textTertiary,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '전체 사운드가 꺼져 있어 음성·효과음 설정이 적용되지 않습니다.',
+                      style: TextStyle(
+                        color: AppColors.textTertiary.withValues(alpha: 0.95),
+                        fontSize: 11.5,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 22),
             _summaryCard(),
           ],
@@ -221,9 +263,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required bool value,
     required Color accent,
     required ValueChanged<bool> onChanged,
+    bool enabled = true,
   }) {
+    final dim = !enabled;
     return InkWell(
-      onTap: () => onChanged(!value),
+      onTap: enabled ? () => onChanged(!value) : null,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
@@ -234,8 +278,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Text(
                     label,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
+                    style: TextStyle(
+                      color: dim
+                          ? AppColors.textTertiary
+                          : AppColors.textPrimary,
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -243,8 +289,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: AppColors.textTertiary,
+                    style: TextStyle(
+                      color: dim
+                          ? AppColors.textTertiary.withValues(alpha: 0.6)
+                          : AppColors.textTertiary,
                       fontSize: 11.5,
                       height: 1.3,
                     ),
@@ -254,8 +302,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             Switch(
               value: value,
-              onChanged: onChanged,
-              activeThumbColor: Colors.black,
+              onChanged: enabled ? onChanged : null,
+              activeThumbColor: AppColors.ink,
               activeTrackColor: accent,
               inactiveThumbColor: AppColors.textSecondary,
               inactiveTrackColor: AppColors.surfaceHigh,
@@ -325,6 +373,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, top: 2, bottom: 2),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: AppColors.textTertiary,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.1,
+        ),
       ),
     );
   }

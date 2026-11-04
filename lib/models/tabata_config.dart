@@ -10,6 +10,7 @@ class TabataConfig {
     this.rounds = 8,
     this.sets = 1,
     this.setRestSeconds = 60,
+    this.soundEnabled = true,
     this.voiceEnabled = true,
     this.sfxEnabled = true,
   });
@@ -28,6 +29,9 @@ class TabataConfig {
 
   /// 세트 간 휴식(초)
   final int setRestSeconds;
+
+  /// 전체 사운드 마스터 스위치 (끄면 음성/효과음 모두 무음)
+  final bool soundEnabled;
 
   /// 음성 안내 사용
   final bool voiceEnabled;
@@ -51,6 +55,7 @@ class TabataConfig {
     int? rounds,
     int? sets,
     int? setRestSeconds,
+    bool? soundEnabled,
     bool? voiceEnabled,
     bool? sfxEnabled,
   }) {
@@ -60,6 +65,7 @@ class TabataConfig {
       rounds: rounds ?? this.rounds,
       sets: sets ?? this.sets,
       setRestSeconds: setRestSeconds ?? this.setRestSeconds,
+      soundEnabled: soundEnabled ?? this.soundEnabled,
       voiceEnabled: voiceEnabled ?? this.voiceEnabled,
       sfxEnabled: sfxEnabled ?? this.sfxEnabled,
     );
@@ -140,6 +146,7 @@ class TabataConfig {
     'rounds': rounds,
     'sets': sets,
     'setRestSeconds': setRestSeconds,
+    'soundEnabled': soundEnabled,
     'voiceEnabled': voiceEnabled,
     'sfxEnabled': sfxEnabled,
   };
@@ -163,6 +170,7 @@ class TabataConfig {
       rounds: readInt('rounds', 8).clamp(1, 99),
       sets: readInt('sets', 1).clamp(1, 20),
       setRestSeconds: readInt('setRestSeconds', 60).clamp(0, 3600),
+      soundEnabled: readBool('soundEnabled', true),
       voiceEnabled: readBool('voiceEnabled', true),
       sfxEnabled: readBool('sfxEnabled', true),
     );

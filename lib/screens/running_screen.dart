@@ -5,11 +5,18 @@ import '../services/tabata_engine.dart';
 import '../theme/app_theme.dart';
 import '../widgets/huge_time_display.dart';
 
-/// 화면 2 — 운동 진행 화면 (가장 중요한 화면)
+/// 화면 2 — 운동 진행 화면
 ///
-/// 운동/휴식/준비 상태에 따라 **화면 전체 배경색**이 바뀐다.
-/// 남은 시간을 화면에서 가장 크게 보여주고, 나머지 정보는 하단에 작게 모은다.
-/// 그라데이션·네온·발광·그림자·애니메이션은 사용하지 않는다.
+/// 구성 (시각적 우선순위 순)
+///  ① 상단: 운동 중 / 휴식 중 / 준비 / 세트 휴식
+///  ② 중앙: 남은 시간 (화면에서 가장 큰 요소, 잘리지 않음)
+///  ③ 라운드 카드 / 세트 카드 (독립 카드, 큰 숫자)
+///  ④ 진행률 바 + 퍼센트 + 전체 남은 시간
+///  ⑤ 다음 구간 안내 (현재와 구분되도록 톤 다운)
+///  ⑥ 일시정지 / 종료 / 건너뛰기
+///
+/// 화면 전체가 상태 색 단색으로 채워지고, 그라데이션·네온·발광·불필요한
+/// 그림자·장식 애니메이션은 쓰지 않는다.
 class RunningScreen extends StatelessWidget {
   const RunningScreen({
     super.key,
@@ -28,12 +35,8 @@ class RunningScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final phase = engine.currentPhase;
     final type = phase?.type.name ?? 'prepare';
-
-    // 화면 전체를 채우는 단색 배경
     final bg = AppColors.bgOf(type);
-    // 배경 위에 올릴 글자색 (노랑 위에서는 검정)
     final fg = AppColors.onBgOf(type);
-
     final paused = engine.isPaused;
 
     return Scaffold(
@@ -43,32 +46,31 @@ class RunningScreen extends StatelessWidget {
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, box) {
-              // 남은 시간이 화면의 절반 이상을 차지하도록 크게 잡는다.
-              // HugeTimeDisplay 내부에서 실제 폭/높이를 측정해 잘리지 않게 축소한다.
-              final timeSize = (box.maxHeight * 0.42).clamp(120.0, 340.0);
+              final timeSize = (box.maxHeight * 0.29).clamp(88.0, 244.0);
 
               return Column(
                 children: [
                   _header(phase, fg, paused),
+                  const SizedBox(height: 4),
+                  // ② 남은 시간 — 화면에서 가장 큰 요소
                   Expanded(
+                    flex: 5,
                     child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          HugeTimeDisplay(
-                            totalSeconds: engine.remainingSeconds,
-                            color: fg,
-                            fontSize: timeSize,
-                            showHours: engine.remainingSeconds >= 3600,
-                            horizontalPadding: 12,
-                          ),
-                          const SizedBox(height: 10),
-                          _roundLine(fg),
-                        ],
+                      child: HugeTimeDisplay(
+                        totalSeconds: engine.remainingSeconds,
+                        color: fg,
+                        fontSize: timeSize,
+                        showHours: engine.remainingSeconds >= 3600,
+                        horizontalPadding: 22,
                       ),
                     ),
                   ),
-                  _bottomInfo(fg),
+                  // ③ 라운드 / 세트 카드
+                  _progressCards(fg, bg),
+                  const SizedBox(height: 14),
+                  // ④ 진행률
+                  _progressSection(fg, bg),
+                  const SizedBox(height: 10),
                   _controls(bg, fg, paused),
                 ],
               );
@@ -79,7 +81,7 @@ class RunningScreen extends StatelessWidget {
     );
   }
 
-  // ---------------------------------------------------------------- 상단
+  // ---------------------------------------------------------------- ① 상태
 
   Widget _header(Phase? phase, Color fg, bool paused) {
     final label = switch (phase?.type) {
@@ -91,34 +93,82 @@ class RunningScreen extends StatelessWidget {
     };
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
       child: Column(
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: fg,
-              fontSize: 30,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.0,
-            ),
-          ),
-          if (paused) ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                border: Border.all(color: fg, width: 2),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                '일시정지',
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
                 style: TextStyle(
                   color: fg,
-                  fontSize: 14,
+                  fontSize: 26,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
+                  letterSpacing: 1.2,
                 ),
+              ),
+              if (paused) ...[
+                const SizedBox(width: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: fg, width: 2),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  child: Text(
+                    '일시정지',
+                    style: TextStyle(
+                      color: fg,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------- ③ 라운드/세트
+
+  Widget _progressCards(Color fg, Color bg) {
+    final perSet = engine.totalRoundsPerSet;
+    final sets = engine.totalSets;
+    final round = engine.currentRound;
+    final set = engine.currentSet;
+    final showSet = sets > 1;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          Expanded(
+            child: _PhaseCard(
+              label: '라운드',
+              current: round,
+              total: perSet,
+              fg: fg,
+              bg: bg,
+            ),
+          ),
+          // 세트가 1개면 카드를 아예 만들지 않아 레이아웃이 깨지지 않는다.
+          if (showSet) ...[
+            const SizedBox(width: 10),
+            Expanded(
+              child: _PhaseCard(
+                label: '세트',
+                current: set,
+                total: sets,
+                fg: fg,
+                bg: bg,
               ),
             ),
           ],
@@ -127,33 +177,9 @@ class RunningScreen extends StatelessWidget {
     );
   }
 
-  // ---------------------------------------------------------------- 라운드
+  // ------------------------------------------------------------ ④ 진행률
 
-  Widget _roundLine(Color fg) {
-    final perSet = engine.totalRoundsPerSet;
-    final sets = engine.totalSets;
-    final roundNum = engine.currentRound;
-    final setNum = engine.currentSet;
-
-    final text = sets > 1
-        ? '라운드 $roundNum / $perSet   ·   세트 $setNum / $sets'
-        : '라운드 $roundNum / $perSet';
-
-    return Text(
-      text,
-      style: TextStyle(
-        color: fg,
-        fontSize: 22,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.2,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------- 하단 정보
-
-  Widget _bottomInfo(Color fg) {
+  Widget _progressSection(Color fg, Color bg) {
     final progress = engine.totalProgress;
     final next = engine.nextPhase;
 
@@ -171,26 +197,36 @@ class RunningScreen extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 22),
       child: Column(
         children: [
-          Text(
-            nextText,
-            style: TextStyle(
-              color: fg.withValues(alpha: 0.82),
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+          // ⑤ 다음 구간은 테두리 없는 작은 알약으로 현재 상태와 구분
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: Color.alphaBlend(
+                fg.withValues(alpha: 0.14),
+                Colors.transparent,
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              nextText,
+              style: TextStyle(
+                color: fg.withValues(alpha: 0.92),
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-          const SizedBox(height: 14),
-          // 전체 진행률
+          const SizedBox(height: 12),
           ClipRRect(
             borderRadius: BorderRadius.circular(3),
             child: SizedBox(
-              height: 6,
+              height: 5,
               child: Stack(
                 children: [
-                  Container(color: fg.withValues(alpha: 0.28)),
+                  Container(color: AppColors.trackOn(bg)),
                   FractionallySizedBox(
                     widthFactor: progress.clamp(0.0, 1.0),
                     child: Container(color: fg),
@@ -199,14 +235,14 @@ class RunningScreen extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 7),
           Row(
             children: [
               Text(
                 '전체 ${(progress * 100).round()}%',
                 style: TextStyle(
-                  color: fg.withValues(alpha: 0.82),
-                  fontSize: 13,
+                  color: fg.withValues(alpha: 0.85),
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
@@ -215,8 +251,8 @@ class RunningScreen extends StatelessWidget {
               Text(
                 '남은 ${_mmss(engine.remainingTotalSeconds)}',
                 style: TextStyle(
-                  color: fg.withValues(alpha: 0.82),
-                  fontSize: 13,
+                  color: fg.withValues(alpha: 0.85),
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
@@ -228,14 +264,11 @@ class RunningScreen extends StatelessWidget {
     );
   }
 
-  // ---------------------------------------------------------------- 조작
+  // ------------------------------------------------------------ ⑥ 조작
 
   Widget _controls(Color bg, Color fg, bool paused) {
-    // 배경과 반대되는 단색으로 버튼을 채워 명확하게 구분한다.
-    final buttonFill = fg;
-
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 6, 24, 22),
+      padding: const EdgeInsets.fromLTRB(22, 4, 22, 18),
       child: Row(
         children: [
           // 종료 — 실수 방지를 위해 작은 외곽선 버튼으로 분리
@@ -245,15 +278,14 @@ class RunningScreen extends StatelessWidget {
             onTap: onStop,
             tooltip: '운동 종료',
           ),
-          const SizedBox(width: 14),
-          // 일시정지 / 재개 — 가장 큰 버튼
+          const SizedBox(width: 12),
           Expanded(
             child: SizedBox(
-              height: 76,
+              height: 68,
               child: FilledButton(
                 onPressed: onPauseToggle,
                 style: FilledButton.styleFrom(
-                  backgroundColor: buttonFill,
+                  backgroundColor: fg,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -263,15 +295,14 @@ class RunningScreen extends StatelessWidget {
                   children: [
                     Icon(
                       paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                      size: 36,
-                      // 배경색과 동일한 색으로 채워 확실히 반전시킨다
+                      size: 32,
                       color: bg,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 7),
                     Text(
                       paused ? '재개' : '일시정지',
                       style: TextStyle(
-                        fontSize: 22,
+                        fontSize: 20,
                         fontWeight: FontWeight.w900,
                         letterSpacing: -0.3,
                         color: bg,
@@ -282,8 +313,7 @@ class RunningScreen extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 14),
-          // 건너뛰기
+          const SizedBox(width: 12),
           _SideButton(
             icon: Icons.keyboard_double_arrow_right_rounded,
             color: fg,
@@ -306,6 +336,77 @@ class RunningScreen extends StatelessWidget {
   }
 }
 
+/// 라운드/세트 표시 카드.
+/// 현재 값은 크게, 전체 값은 작게 — 둘의 차이가 즉시 읽히도록 했다.
+class _PhaseCard extends StatelessWidget {
+  const _PhaseCard({
+    required this.label,
+    required this.current,
+    required this.total,
+    required this.fg,
+    required this.bg,
+  });
+
+  final String label;
+  final int current;
+  final int total;
+  final Color fg;
+  final Color bg;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 9, 14, 11),
+      decoration: BoxDecoration(
+        color: AppColors.cardOn(bg),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: fg.withValues(alpha: 0.75),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.0,
+            ),
+          ),
+          const SizedBox(height: 1),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '$current',
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 36,
+                  height: 1.05,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -1.2,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              Text(
+                ' / $total',
+                style: TextStyle(
+                  color: fg.withValues(alpha: 0.72),
+                  fontSize: 17,
+                  height: 1.05,
+                  fontWeight: FontWeight.w800,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// 보조 버튼 — 어떤 배경색 위에서도 깔끔하게 보이도록 외곽선만 사용한다.
 class _SideButton extends StatelessWidget {
   const _SideButton({
@@ -325,8 +426,8 @@ class _SideButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: SizedBox(
-        width: 64,
-        height: 64,
+        width: 58,
+        height: 58,
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -334,10 +435,17 @@ class _SideButton extends StatelessWidget {
             onTap: onTap,
             child: Container(
               decoration: BoxDecoration(
-                border: Border.all(color: color, width: 2),
+                border: Border.all(
+                  color: color.withValues(alpha: 0.85),
+                  width: 2,
+                ),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, size: 28, color: color),
+              child: Icon(
+                icon,
+                size: 26,
+                color: color.withValues(alpha: 0.9),
+              ),
             ),
           ),
         ),
