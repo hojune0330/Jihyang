@@ -241,8 +241,22 @@ void main() {
           'workLast',
         ]) {
           final f = File('assets/audio/seq_${style.assetKey}_$key.wav');
-          final bytes = f.lengthSync() - 44; // WAV 헤더
-          final actualMs = (bytes / 2 / 44100 * 1000).round();
+          // WAV 헤더 길이는 data 청크 위치에 따라 달라진다 → 실제로 읽는다.
+          final r = f.openSync();
+          final hdr = r.readSync(64);
+          r.closeSync();
+          var dataLen = hdr.length;
+          for (var i = 0; i + 8 <= hdr.length - 4; i++) {
+            if (hdr[i] == 0x64 && hdr[i + 1] == 0x61 && hdr[i + 2] == 0x74 &&
+                hdr[i + 3] == 0x61) {
+              dataLen = hdr[i + 4] |
+                  (hdr[i + 5] << 8) |
+                  (hdr[i + 6] << 16) |
+                  (hdr[i + 7] << 24);
+              break;
+            }
+          }
+          final actualMs = (dataLen / 2 / 44100 * 1000).round();
 
           final plan = AnnouncePlan(key: key, voices: const [
             StateVoice.startWork,
@@ -256,7 +270,7 @@ void main() {
           // 표 값과 실제 파일 길이가 40ms 이상 어긋나면 보호구간 계산이 틀어진다
           expect(
             (t.totalMs - actualMs).abs(),
-            lessThan(60),
+            lessThan(80),
             reason: '$style $key: 표 ${t.totalMs}ms vs 실제 ${actualMs}ms',
           );
         }

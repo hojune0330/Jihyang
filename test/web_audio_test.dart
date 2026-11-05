@@ -59,30 +59,31 @@ void main() {
       }
     });
 
-    test('아기 목소리는 상태 길이표와 시퀀스 길이표가 일관된다', () {
-      // 시퀀스 = 삑(130ms) + 간격(90ms) + 음성 + 약간의 여유
-      const overhead = 130 + 90; // beepLeadMs + attentionGapMs
-      final st = <String, int>{
-        'prepare': 500,
-        'startWork': 820,
-        'startRest': 720,
-        'setRest': 660,
-        'lastRound': 1040,
-        'finish': 900,
-      };
-      final seq = seqDurMs['baby']!;
-      for (final e in st.entries) {
-        final expected = e.value + overhead;
-        final actual = seq[e.key]!;
-        expect((actual - expected).abs(), lessThan(120),
-            reason: '${e.key}: 상태 ${e.value}ms 인데 시퀀스가 ${actual}ms '
-                '(기대 ${expected}ms)');
+    test('목소리 3종 모두 상태 길이표와 시퀀스 길이표가 일관된다', () {
+      // 시퀀스 = 삑(130ms) + 간격(attentionGapMs) + 음성
+      const overhead = beepLeadMs + attentionGapMs;
+      for (final style in VoiceStyle.values) {
+        final seq = seqDurMs[style.assetKey]!;
+        for (final voice in StateVoice.values) {
+          // 상태 음성 → 시퀀스 키 매핑
+          final key = voice.name;
+          if (!seq.containsKey(key)) continue;
+          final expected = stateVoiceDurationMs(style, voice) + overhead;
+          final actual = seq[key]!;
+          expect((actual - expected).abs(), lessThan(60),
+              reason: '${style.assetKey}.$key: '
+                  '상태 ${stateVoiceDurationMs(style, voice)}ms 인데 '
+                  '시퀀스가 ${actual}ms (기대 ${expected}ms)');
+        }
       }
     });
 
-    test('아기 카운트다운 묶음은 5개 숫자를 담을 만큼 길다', () {
+    test('목소리 3종 모두 카운트다운 묶음이 5개 숫자를 담을 만큼 길다', () {
       // 마지막 숫자 '1' 이 4000ms 에서 시작하고 그 길이만큼 더 필요하다.
-      expect(cntDurMs['baby']!, greaterThan(4300));
+      for (final style in VoiceStyle.values) {
+        expect(cntDurMs[style.assetKey]!, greaterThan(4300),
+            reason: '${style.assetKey} 묶음이 너무 짧다');
+      }
       expect(countBundleLastMs, 4000);
       expect(countStepMs, 1000);
     });

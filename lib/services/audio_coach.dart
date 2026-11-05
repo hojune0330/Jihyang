@@ -53,45 +53,58 @@ enum StateVoice {
 }
 
 /// 삑 소리와 음성 사이 간격 (파일 생성 시 쓴 값과 동일해야 한다)
-const int attentionGapMs = 90;
+///
+/// v3 에서 90ms → 180ms 로 늘렸다. 이전에는 삑이 끝나자마자 음성이
+/// 붙어서 '툭' 하고 튀는 느낌이 있었다. 사람이 숨을 한 번 쉬는
+/// 정도의 틈을 두면 훨씬 자연스럽게 이어진다.
+const int attentionGapMs = 180;
 
 /// 음성과 음성 사이 간격
-const int voiceToVoiceGapMs = 110;
+///
+/// v3 에서 110ms → 300ms. '운동 시작' 과 '마지막 라운드' 처럼 두 문장이
+/// 연달아 나올 때, 이전에는 거의 붙어 있어서 두 번째 문장이 급하게
+/// 들렸다.
+const int voiceToVoiceGapMs = 300;
 
 /// 주의음 없이 음성만 시작할 때의 지연
 const int silenceStartMs = 40;
 
+/// 시퀀스를 합칠 때 쓰는 크로스페이드 길이 (파일 생성용)
+const int crossfadeMs = 6;
+
 /// 안내가 끝난 뒤 카운트다운 숫자를 허용하기까지의 여유
-const int guardPaddingMs = 140;
+const int guardPaddingMs = 240;
 
 /// 시퀀스 파일 앞부분의 '삑' 길이 (ms)
 const int beepLeadMs = 130;
 
 /// 목소리별 상태 안내 **음성만의** 길이(ms)
+///
+/// v3 (elevenlabs/v4-tts + DSP) 실측값 — tool/build_voice_v3.py 산출.
 const Map<VoiceStyle, Map<StateVoice, int>> _stDurationMs = {
   VoiceStyle.male: {
-    StateVoice.prepare: 740,
-    StateVoice.startWork: 940,
-    StateVoice.startRest: 960,
-    StateVoice.setRest: 1340,
-    StateVoice.lastRound: 1100,
-    StateVoice.finish: 1580,
+    StateVoice.prepare: 510,
+    StateVoice.startWork: 740,
+    StateVoice.startRest: 890,
+    StateVoice.setRest: 930,
+    StateVoice.lastRound: 930,
+    StateVoice.finish: 880,
   },
   VoiceStyle.female: {
-    StateVoice.prepare: 920,
-    StateVoice.startWork: 875,
-    StateVoice.startRest: 906,
-    StateVoice.setRest: 1340,
-    StateVoice.lastRound: 1400,
-    StateVoice.finish: 1840,
+    StateVoice.prepare: 530,
+    StateVoice.startWork: 780,
+    StateVoice.startRest: 800,
+    StateVoice.setRest: 1010,
+    StateVoice.lastRound: 1020,
+    StateVoice.finish: 950,
   },
   VoiceStyle.baby: {
-    StateVoice.prepare: 500,
+    StateVoice.prepare: 510,
     StateVoice.startWork: 820,
-    StateVoice.startRest: 720,
-    StateVoice.setRest: 660,
-    StateVoice.lastRound: 1040,
-    StateVoice.finish: 900,
+    StateVoice.startRest: 820,
+    StateVoice.setRest: 870,
+    StateVoice.lastRound: 990,
+    StateVoice.finish: 880,
   },
 };
 
@@ -99,41 +112,43 @@ int stateVoiceDurationMs(VoiceStyle style, StateVoice v) =>
     _stDurationMs[style]?[v] ?? 900;
 
 /// 안내 시퀀스 파일의 **실제 길이**(ms) — tool/build_sequences.py 산출값.
+///
+/// v3: 삑+음성 크로스페이드 합성, 간격 180/300ms.
 const Map<String, Map<String, int>> seqDurMs = {
   'male': {
-    'prepare': 960,
-    'startWork': 1160,
-    'startRest': 1180,
-    'setRest': 1560,
-    'lastRound': 1320,
-    'finish': 1800,
-    'workLast': 2370,
+    'prepare': 808,
+    'startWork': 1038,
+    'startRest': 1188,
+    'setRest': 1228,
+    'lastRound': 1228,
+    'finish': 1178,
+    'workLast': 2256,
   },
   'female': {
-    'prepare': 1140,
-    'startWork': 1095,
-    'startRest': 1126,
-    'setRest': 1560,
-    'lastRound': 1620,
-    'finish': 2060,
-    'workLast': 2605,
+    'prepare': 828,
+    'startWork': 1078,
+    'startRest': 1098,
+    'setRest': 1308,
+    'lastRound': 1318,
+    'finish': 1248,
+    'workLast': 2386,
   },
   'baby': {
-    'prepare': 720,
-    'startWork': 1040,
-    'startRest': 940,
-    'setRest': 880,
-    'lastRound': 1260,
-    'finish': 1120,
-    'workLast': 2190,
+    'prepare': 808,
+    'startWork': 1118,
+    'startRest': 1118,
+    'setRest': 1168,
+    'lastRound': 1288,
+    'finish': 1178,
+    'workLast': 2396,
   },
 };
 
 /// 5·4·3·2·1 이 1초 간격으로 들어 있는 묶음 파일의 길이(ms)
 const Map<String, int> cntDurMs = {
-  'male': 4449,
-  'female': 4424,
-  'baby': 4360,
+  'male': 4470,
+  'female': 4480,
+  'baby': 4460,
 };
 
 /// 묶음 안에서 숫자 '5' 가 시작하는 위치 = 0ms.
