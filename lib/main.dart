@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -106,6 +108,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   /// 이번 세션 기록이 이미 저장되었는지 (중복 저장 방지)
   bool _recordSaved = false;
+
+  /// 이번 앱 실행에서 오디오 잠금 해제 + 사전 로딩을 마쳤는가.
+  ///
+  /// 웹은 첫 제스처 전까지 소리를 낼 수 없다. 준비 화면에서 미리 풀어 두면
+  /// 운동 시작 직후 첫 음성도 지연 없이 나간다.
+  bool _audioReady = false;
 
   @override
   void initState() {
@@ -289,8 +297,28 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     setState(() => _todayCount = WorkoutStore.today(records).length);
   }
 
-  void _start() {
+  Future<void> _start() async {
     _recordSaved = false;
+
+    // ── 세션 시작 전 오디오 게이트 ────────────────────────────────────
+    //
+    // 브라우저는 사용자 제스처 없이는 소리를 재생하지 못한다. '운동 시작'
+    // 버튼을 누른 지금이 **가장 확실한 제스처 시점**이므로, 여기서
+    // 잠금을 풀고 이번 세션에 쓸 음성 파일을 미리 받아 둔 뒤 타이머를
+    // 시작한다. 파일이 준비되기 전에 타이머가 먼저 흐르는 문제를 막는다.
+    if (!_audioReady) {
+      try {
+        await AudioCoach.instance.unlock();
+        await AudioCoach.instance
+            .preloadForSession(style: _config.voiceStyle)
+            .timeout(const Duration(seconds: 4), onTimeout: () {});
+      } catch (_) {
+        // 오디오를 못 준비해도 타이머는 반드시 시작한다.
+      }
+      if (!mounted) return;
+      setState(() => _audioReady = true);
+    }
+
     _engine.start();
     NotificationService.instance.scheduleSession(_engine);
   }
@@ -406,9 +434,33 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
-        body: KeyedSubtree(key: ValueKey(_screen), child: _buildScreen()),
+        body: Listener(
+          // 웹 브라우저는 **사용자 제스처 안에서만** 오디오 잠금을 풀 수 있다.
+          // 앱 어디를 처음 눌러도 그 순간 잠금을 풀고 음성 파일을 미리 받아
+          // 두면, 운동 시작 버튼을 누르기도 전에 준비가 끝난다.
+          // (공유 링크를 받은 사람의 기기에서 소리가 안 나던 문제의 대응)
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (_) => _warmAudioOnce(),
+          child: KeyedSubtree(key: ValueKey(_screen), child: _buildScreen()),
+        ),
       ),
     );
+  }
+
+  /// 첫 터치에서 한 번만 오디오를 준비한다.
+  void _warmAudioOnce() {
+    if (_audioReady) return;
+    _audioReady = true;
+    unawaited(() async {
+      try {
+        await AudioCoach.instance.unlock();
+        await AudioCoach.instance.preloadForSession(style: _config.voiceStyle);
+        if (!mounted) return;
+        setState(() {});
+      } catch (_) {
+        // 실패해도 앱은 정상 동작해야 한다.
+      }
+    }());
   }
 
   Widget _buildScreen() {

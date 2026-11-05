@@ -34,6 +34,26 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
+
+  <!--
+    오디오 브리지 (웹 전용).
+
+    왜 필요한가
+    -----------
+    브라우저는 **사용자 제스처 없이** 만든 AudioContext 를 'suspended' 로
+    잠근다. 잠긴 컨텍스트는 소리를 전혀 내지 않는다. 링크를 받은 사람이
+    앱을 열면 아무 소리도 안 나던 원인이 이것이다.
+
+    이 스크립트는
+      * AudioContext 를 **하나만** 만들어 (Safari 동시 컨텍스트 제한 회피)
+      * 첫 터치/클릭/키 입력에서 잠금을 해제하고
+      * 모든 wav 를 미리 받아 디코딩해 두고
+      * 재생 시각을 AudioContext 시간 기준으로 정확히 지정한다.
+
+    Dart 쪽은 `audio_bridge_dart.dart` 로 이 객체를 호출한다.
+    스크립트를 못 받아도 앱은 죽지 않는다 (Dart 가 없으면 audioplayers 로 폴백).
+  -->
+  <script src="audio_bridge.js" defer></script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

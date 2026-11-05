@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../models/phase.dart';
 import '../models/tabata_config.dart';
+import 'web_audio.dart';
 
 // ===========================================================================
 // 효과음
@@ -85,12 +86,12 @@ const Map<VoiceStyle, Map<StateVoice, int>> _stDurationMs = {
     StateVoice.finish: 1840,
   },
   VoiceStyle.baby: {
-    StateVoice.prepare: 710,
-    StateVoice.startWork: 769,
-    StateVoice.startRest: 740,
-    StateVoice.setRest: 1160,
-    StateVoice.lastRound: 1140,
-    StateVoice.finish: 1590,
+    StateVoice.prepare: 500,
+    StateVoice.startWork: 820,
+    StateVoice.startRest: 720,
+    StateVoice.setRest: 660,
+    StateVoice.lastRound: 1040,
+    StateVoice.finish: 900,
   },
 };
 
@@ -118,13 +119,13 @@ const Map<String, Map<String, int>> seqDurMs = {
     'workLast': 2605,
   },
   'baby': {
-    'prepare': 930,
-    'startWork': 990,
-    'startRest': 960,
-    'setRest': 1380,
-    'lastRound': 1360,
-    'finish': 1810,
-    'workLast': 2240,
+    'prepare': 720,
+    'startWork': 1040,
+    'startRest': 940,
+    'setRest': 880,
+    'lastRound': 1260,
+    'finish': 1120,
+    'workLast': 2190,
   },
 };
 
@@ -132,7 +133,7 @@ const Map<String, Map<String, int>> seqDurMs = {
 const Map<String, int> cntDurMs = {
   'male': 4449,
   'female': 4424,
-  'baby': 4400,
+  'baby': 4360,
 };
 
 /// 묶음 안에서 숫자 '5' 가 시작하는 위치 = 0ms.
@@ -358,6 +359,26 @@ class _Channel {
     required double volume,
   }) async {
     final gen = ++_gen; // ← 동기 구간: 즉시 이전 재생 무효화
+
+    // ── 웹: 사전 디코딩된 AudioBuffer 로 정확히 재생한다 ──────────────
+    //
+    // audioplayers_web 은 플레이어마다 AudioContext 를 만들고, 그 컨텍스트가
+    // 사용자 제스처 없이 생성되면 잠겨서 **소리가 아예 나지 않는다.**
+    // (공유 링크를 받은 사람의 기기에서 무음이던 원인)
+    if (AudioCoach._web.available) {
+      final ok = AudioCoach._web.play(
+        asset,
+        role: label,
+        volume: volume,
+        offsetMs: startAtMs,
+        interrupt: true,
+      );
+      if (!ok && kDebugMode) {
+        debugPrint('[$label] web play skipped($asset): not ready/locked');
+      }
+      return;
+    }
+
     final player = _ensurePlayer();
     if (player == null) return;
 
@@ -383,6 +404,10 @@ class _Channel {
   /// 즉시 침묵. 세대를 올려 진행 중이던 재생도 함께 폐기한다.
   void stop() {
     _gen++;
+    if (AudioCoach._web.available) {
+      AudioCoach._web.stopRole(label);
+      return;
+    }
     final player = _player;
     if (player == null) return;
     unawaited(player.stop().timeout(_t).catchError((_) {}));
@@ -467,8 +492,30 @@ class AudioCoach {
   final _Channel _sfx = _Channel('sfx');
   final _Channel _preview = _Channel('preview');
 
+  /// 웹 전용 오디오 브리지 (모바일에서는 스텁).
+  ///
+  /// 웹은 audioplayers 를 쓰지 않는다. 이유는 `web/audio_bridge.js` 참고:
+  ///   * 플레이어마다 AudioContext 가 생겨 Safari 동시 개수 제한에 걸리고
+  ///   * 사용자 제스처 없이 만든 컨텍스트가 'suspended' 로 잠겨 **완전 무음**
+  ///   * HTMLAudioElement 지연 때문에 1초 카운트다운이 부정확
+  static const _web = WebAudio();
+
   bool _ready = false;
   bool get isReady => _ready;
+
+  /// 오디오가 지금 소리를 낼 수 있는 상태인가.
+  ///
+  /// * 웹: 브라우저 AudioContext 잠금이 풀렸는지 확인
+  /// * 모바일/테스트: 잠금 개념이 없으므로 항상 true
+  bool get isUnlocked => _web.available ? _web.unlocked : true;
+
+  /// 웹 브리지를 실제로 쓰고 있는가 (진단용)
+  bool get isWebBridge => _web.available;
+
+  /// 사전 로딩이 끝나 즉시 재생 가능한가
+  bool get isPreloaded => _preloaded;
+
+  bool _preloaded = false;
 
   final List<PlayLogEntry> playLog = <PlayLogEntry>[];
 
@@ -500,10 +547,62 @@ class AudioCoach {
     ]);
   }
 
+  /// 첫 사용자 제스처에서 호출 — 웹 오디오 잠금을 푼다.
+  ///
+  /// 브라우저는 제스처 없이 만든 AudioContext 를 잠근다. 이 호출 없이는
+  /// **링크를 받은 사람의 기기에서 소리가 전혀 나지 않는다.**
+  Future<bool> unlock() async {
+    if (!_web.available) return true;
+    return _web.unlock();
+  }
+
+  /// 세션 시작 전에 이번 목소리로 쓸 모든 파일을 미리 받아 둔다.
+  ///
+  /// 재생 요청 시점에 파일을 받으면 첫 음이 늦게 나오고, 준비 안 된
+  /// 상태에서 타이머가 먼저 흘러가 카운트다운이 어긋난다.
+  Future<void> preloadForSession({VoiceStyle? style}) async {
+    if (!_web.available) {
+      _preloaded = true;
+      return;
+    }
+    final s = style ?? voiceStyle;
+    final assets = <String>{};
+    assets.addAll(Sfx.values.map((e) => e.asset));
+    for (final key in seqDurMs[s.assetKey]!.keys) {
+      assets.add('audio/seq_${s.assetKey}_$key.wav');
+    }
+    assets.add('audio/cnt_${s.assetKey}.wav');
+    for (var n = 1; n <= 5; n++) {
+      assets.add('audio/c_${s.assetKey}_$n.wav');
+      assets.add('audio/st_${s.assetKey}_${_stateKeys[n - 1]}.wav');
+    }
+    final ok = await _web.preload(assets.toList());
+    _preloaded = ok > 0 || assets.isEmpty;
+    if (kDebugMode) {
+      debugPrint('preload: $ok/${assets.length} ready');
+    }
+    // 목소리가 바뀌었을 수 있으므로 잠시 뒤 안내용 시퀀스도 확인한다.
+  }
+
+  static const List<String> _stateKeys = [
+    'prepare',
+    'startWork',
+    'startRest',
+    'setRest',
+    'lastRound',
+    'finish',
+  ];
+
   /// 첫 소리 지연을 줄이기 위한 준비. 채널은 이미 만들어져 있으므로
   /// 여기서는 존재하는 파일만 확인한다.
   Future<void> warmUp() async {
     if (!_anySound) return;
+    // 웹은 실제로 파일을 받아 디코딩해 둔다 (재생 지연·누락 방지).
+    // 모바일은 플레이어가 이미 준비되어 있으므로 계정만 확인한다.
+    if (_web.available) {
+      await preloadForSession();
+      return;
+    }
     final assets = <String>{};
     assets.addAll(Sfx.values.map((s) => s.asset));
     final map = seqDurMs[voiceStyle.assetKey];
@@ -513,7 +612,6 @@ class AudioCoach {
       }
     }
     assets.add('audio/cnt_${voiceStyle.assetKey}.wav');
-    // 실제 로딩은 재생 시점에 한다 (채널이 하나뿐이라 미리 걸어 둘 수 없다).
     if (kDebugMode) debugPrint('warmUp: ${assets.length} assets ready');
   }
 

@@ -29,9 +29,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _update(TabataConfig next) {
+    final styleChanged = _c.voiceStyle != next.voiceStyle;
     setState(() => _c = next);
     // 설정 즉시 반영 (미리 듣기 볼륨/목소리)
     AudioCoach.instance.applyConfig(next);
+    // 목소리가 바뀌면 새 목소리 파일을 미리 받아 둔다.
+    // (안 받아 두면 첫 안내가 늦게 나오거나 웹에서 무음이 된다)
+    if (styleChanged) {
+      AudioCoach.instance.preloadForSession(style: next.voiceStyle);
+    }
   }
 
   @override
