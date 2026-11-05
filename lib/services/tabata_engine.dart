@@ -6,6 +6,12 @@ import '../models/phase.dart';
 import '../models/tabata_config.dart';
 import 'audio_coach.dart';
 
+/// 카운트다운 숫자를 이 시간 이상 '지난 것'으로 판정하면 발화하지 않는다.
+///
+/// 타이머 지터·일시적 렉(≈80ms)은 허용하되, 백그라운드에서 돌아와
+/// 몰아서 발화하는 상황(수백 ms~수 초)은 막는다.
+const int countLateGraceMs = 200;
+
 enum EngineStatus { idle, running, paused, finished }
 
 /// 사운드 이벤트 기록 (타이머-사운드 싱크 검증용)
@@ -320,6 +326,7 @@ class TabataEngine extends ChangeNotifier {
     // → 재개 시에는 **남은 다음 숫자 위치**부터 깔끔하게 이어진다.
     _countStarted = false;
     _countStartedWall = null;
+    _countStartPosMs = 0;
 
     notifyListeners();
   }
@@ -356,6 +363,14 @@ class TabataEngine extends ChangeNotifier {
       return;
     }
     AudioCoach.instance.cut();
+    // 건너뛰면 이전 구간의 카운트다운 상태는 전부 버린다.
+    //
+    // 예전에는 _advanceFrom 안에서만 초기화했는데, skip 경로에서
+    // _countStartedWall 이 남아 있으면 다음 구간의 첫 카운트다운이
+    // '재생 중' 으로 오판돼 **묶음이 시작되지 않는다** (숫자 누락).
+    _countStarted = false;
+    _countStartedWall = null;
+    _countStartPosMs = 0;
     // 건너뛰기로 들어간 구간도 '전환 순간'이므로 시작 안내는 울린다.
     // (일시정지 상태에서 건너뛰면 소리는 내지 않는다)
     _advanceFrom(
@@ -489,6 +504,18 @@ class TabataEngine extends ChangeNotifier {
           continue;
         }
 
+        // ── 이미 지난 숫자를 delay 0 으로 '즉시' 발화하지 않는다 ───────
+        //
+        // 예전에는 지난 숫자를 delay 0 으로 걸었다. 앱이 백그라운드에서
+        // 돌아와 catchUp() 이 늦게 돌면 밀린 숫자들이 **0ms 간격으로
+        // 몰아서** 발화됐다. 묶음 재생은 그중 첫 번째만 살아남으므로
+        // 숫자가 밀리고 겹쳐 들리는 직접 원인이 된다.
+        // (실기기 보고: "음성이 밀리거나 두 번 반복, 버벅거림")
+        if (delayMs < -countLateGraceMs) {
+          _announced.add(n);
+          continue;
+        }
+
         _scheduleAt(
           start.add(Duration(milliseconds: atMs)),
           delayMs < 0 ? 0 : delayMs,
@@ -512,7 +539,11 @@ class TabataEngine extends ChangeNotifier {
             final targetPos = (5 - n) * countStepMs;
             final now = DateTime.now();
 
-            // ① 아직 시작 전 → 이 위치에서 시작
+            // ① 아직 시작 전 → **정확한 위치로 점프**해서 시작한다.
+            //
+            // 묶음은 항상 0ms(숫자 5)부터 재생을 시작했기 때문에, 지난
+            // 숫자를 건너뛴 경우(0ms 로 즉시 시작) 위치가 어긋났다.
+            // 이제는 지금 울려야 할 숫자의 타임라인 위치로 이동해 시작한다.
             if (!_countStarted) {
               _countStarted = true;
               _countStartedWall = now;
@@ -532,9 +563,14 @@ class TabataEngine extends ChangeNotifier {
             final startedAt = _countStartedWall;
             if (startedAt == null) return;
             final played = now.difference(startedAt).inMilliseconds;
-            final remainOfBundle =
-                (cntDurMs[_config.voiceStyle.assetKey] ?? 4400) - _countStartPosMs;
-            if (played > remainOfBundle + 200) {
+
+            // 벽시계상 지금 묶음이 어디쯤이어야 하는가.
+            // 재생 위치(_countStartPosMs) + 경과(played).
+            // 실제 위치와 기대 위치가 크게 벌어졌으면 재생이 죽은 것이므로
+            // 현재 숫자 위치로 다시 건다.
+            final expectedPos = _countStartPosMs + played;
+            final drift = (expectedPos - targetPos).abs();
+            if (drift > countStepMs) {
               _countStartedWall = now;
               _countStartPosMs = targetPos;
               AudioCoach.instance.playCountBundleAt(targetPos);

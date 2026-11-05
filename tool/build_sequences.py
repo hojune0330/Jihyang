@@ -151,22 +151,36 @@ def join(parts):
 
 
 def main():
+    # 남성만 다시 만드는 모드 (v5) — 여성·아기 시퀀스는 건드리지 않는다.
+    only = os.environ.get('SEQ_ONLY_STYLE')
+    styles = (only,) if only else ('male', 'female', 'baby')
+
     meta = {'seq': {}, 'cnt': {}}
     try:
         with open('/tmp/voice_v4_meta.json') as fh:
             prev = json.load(fh)
         meta['st'] = prev.get('st', {})
+        meta['seq'] = prev.get('seq', {})
+        meta['cnt'] = prev.get('cnt', {})
+    except Exception:
+        pass
+    # v5 남성 메타가 있으면 st 길이를 그것으로 덮는다.
+    try:
+        with open('/tmp/voice_v5_male_meta.json') as fh:
+            v5 = json.load(fh)
+        meta.setdefault('st', {}).update(v5.get('st', {}))
     except Exception:
         pass
 
     beep = soft_beep(clip('beep.wav'))
     print(f'삑: {len(beep) / OUTC * 1000:.0f}ms  온셋 {onset_ms(beep):.0f}ms  '
           f'rms {np.sqrt(np.mean(beep ** 2)):.3f}')
+    print(f'대상 목소리: {", ".join(styles)}')
     print()
 
     print('== 안내 시퀀스 (삑 + 음성) ==')
-    seq_len = {}
-    for style in ('male', 'female', 'baby'):
+    seq_len = meta.get('seq', {})
+    for style in styles:
         seq_len[style] = {}
         for key in ('prepare', 'startWork', 'startRest', 'setRest',
                     'lastRound', 'finish'):
@@ -179,7 +193,8 @@ def main():
             expect = len(beep) / OUTC * 1000 + ATTENTION_GAP_MS + v_on
             if abs(v_on - ONSET_TOLERANCE_MS) > ONSET_TOLERANCE_MS:
                 print(f'   !! {style}/{key} 음성 온셋 {v_on:.0f}ms')
-            print(f'      음성 온셋 {v_on:.0f}ms → 시퀀스 내 {expect:.0f}ms')
+            print(f'      {style}/{key:10s} 음성 온셋 {v_on:.0f}ms '
+                  f'→ 시퀀스 내 {expect:.0f}ms')
 
         # 운동 시작 + 마지막 라운드 (한 파일)
         a = clip(f'st_{style}_startWork.wav')
@@ -191,8 +206,8 @@ def main():
 
     print()
     print('== 카운트다운 묶음 (5·4·3·2·1) ==')
-    cnt_len = {}
-    for style in ('male', 'female', 'baby'):
+    cnt_len = meta.get('cnt', {})
+    for style in styles:
         digits = [clip(f'c_{style}_{n}.wav') for n in (5, 4, 3, 2, 1)]
         # 각 숫자의 온셋을 보고 i*1000 위치에 정확히 오도록 앞을 당긴다
         step = int(OUTC * COUNT_STEP_MS / 1000)

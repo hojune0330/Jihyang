@@ -84,12 +84,13 @@ const int beepLeadMs = 130;
 /// 잘림 0ms, 앞 무음 제거. 발성은 클립 시작 0~10ms 안에 시작한다.
 const Map<VoiceStyle, Map<StateVoice, int>> _stDurationMs = {
   VoiceStyle.male: {
-    StateVoice.prepare: 456,
-    StateVoice.startWork: 833,
-    StateVoice.startRest: 888,
-    StateVoice.setRest: 900,
-    StateVoice.lastRound: 923,
-    StateVoice.finish: 878,
+    // v5 — 아나운서 톤으로 남성만 재생성 (tool/voice_male_anchor.py)
+    StateVoice.prepare: 471,
+    StateVoice.startWork: 793,
+    StateVoice.startRest: 759,
+    StateVoice.setRest: 1038,
+    StateVoice.lastRound: 893,
+    StateVoice.finish: 873,
   },
   VoiceStyle.female: {
     StateVoice.prepare: 441,
@@ -117,13 +118,14 @@ int stateVoiceDurationMs(VoiceStyle style, StateVoice v) =>
 /// v4: 겹침 없는 이어붙이기, 간격 180/300ms, 삑 RMS 0.24.
 const Map<String, Map<String, int>> seqDurMs = {
   'male': {
-    'prepare': 766,
-    'startWork': 1143,
-    'startRest': 1198,
-    'setRest': 1210,
-    'lastRound': 1233,
-    'finish': 1188,
-    'workLast': 2366,
+    // v5 아나운서 톤
+    'prepare': 781,
+    'startWork': 1103,
+    'startRest': 1069,
+    'setRest': 1348,
+    'lastRound': 1203,
+    'finish': 1183,
+    'workLast': 2297,
   },
   'female': {
     'prepare': 751,
@@ -147,7 +149,7 @@ const Map<String, Map<String, int>> seqDurMs = {
 
 /// 5·4·3·2·1 이 1초 간격으로 들어 있는 묶음 파일의 길이(ms)
 const Map<String, int> cntDurMs = {
-  'male': 4399,
+  'male': 4307,
   'female': 4419,
   'baby': 4419,
 };
@@ -355,9 +357,24 @@ class _Channel {
   AudioPlayer? _ensurePlayer() {
     if (_player != null || _failed) return _player;
     try {
-      _player = AudioPlayer();
+      // `AudioPlayer()` 는 생성자 안에서 `_create()` 를 **비동기로** 던진다.
+      // 플러그인이 없는 환경(단위 테스트)에서는 그 Future 가
+      // `MissingPluginException` 으로 완료되는데, 이를 그대로 두면
+      // **잡히지 않은 비동기 예외**가 되어 테스트·앱이 죽는다.
+      // 존 가드로 감싸 실패를 값으로 바꾼다.
+      runZonedGuarded(
+        () {
+          _player = AudioPlayer();
+        },
+        (e, s) {
+          _failed = true;
+          _player = null;
+          if (kDebugMode) debugPrint('[$label] player creation failed: $e');
+        },
+      );
     } catch (e) {
       _failed = true;
+      _player = null;
       if (kDebugMode) debugPrint('[$label] player creation failed: $e');
     }
     return _player;
@@ -368,7 +385,52 @@ class _Channel {
   int _gen = 0;
   bool _configured = false;
 
+  /// 이 채널이 실제로 어떤 자산을 재생 중인가 (null = 없음).
+  String? _playingAsset;
+
+  /// 마지막으로 설정한 볼륨 — 매 재생마다 platform call 하지 않기 위해 캐시.
+  double? _volume;
+
+  /// 소스가 이미 준비되어 있고 **이어붙이기(seek)만** 하면 되는 상태.
+  ///
+  /// 카운트다운 묶음은 구간 1회 시작 후 최대 4초간 재생된다. 그 사이에
+  /// 새 재생이 걸리면(= 같은 파일을 타임라인 위치에서 다시 걸 때) 소스를
+  /// 교체하지 않고 `seek` 만 하면 이어지므로 끊김이 없다.
+  bool _sourceLoaded = false;
+
+  /// 리소스 준비(모바일). 캐시 목적으로 미리 불러 둔다.
+  Future<void> preload(String asset) async {
+    if (AudioCoach._web.available) return;
+    if (_sourceLoaded && _playingAsset == asset) return;
+    final player = _ensurePlayer();
+    if (player == null) return;
+    try {
+      await player.setSource(AssetSource(asset)).timeout(_t);
+      if (player.state != PlayerState.playing) {
+        // 준비만 하고 재생하지 않는다.
+        await player.stop().timeout(_t);
+      }
+      _playingAsset = asset;
+      _sourceLoaded = true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('[$label] preload failed($asset): $e');
+    }
+  }
+
   /// 같은 채널에 새 재생이 걸리면 이전 재생은 폐기된다.
+  ///
+  /// ## 왜 async 체인을 없앴는가 (v5 핵심 수정)
+  ///
+  /// 예전 구현은 `stop → setVolume → setSource → seek → resume` 을 **모두
+  /// await** 했다. 모바일에서는 각 호출이 platform channel 왕복이고,
+  /// `setSource` 는 자산 디코딩까지 기다린다. 그 사이 마이크로태스크가
+  /// 끼어들어 카운트다운 묶음이 실제로 재생을 시작하는 시점이
+  /// **벽시계 기준보다 늦어진다** → 숫자가 밀려서 들린다.
+  ///
+  /// 지금은:
+  ///   * 같은 파일이 이어지는 중이면 `seek` 만 한다 (소스 교체 없음 → 무끊김)
+  ///   * 볼륨은 값이 바뀔 때만 보낸다 (platform 왕복 절반)
+  ///   * `resume()` 만 await 한다 (실제 시작 시각을 보장해야 하는 유일한 호출)
   Future<void> play(
     String asset, {
     int startAtMs = 0,
@@ -398,21 +460,47 @@ class _Channel {
     final player = _ensurePlayer();
     if (player == null) return;
 
-    try {
-      await player.stop().timeout(_t);
-    } catch (_) {}
-    if (gen != _gen) return;
+    final sameSource = _sourceLoaded && _playingAsset == asset;
+    final needsVolume = _volume != volume;
 
     try {
-      await player.setVolume(volume).timeout(_t);
+      if (sameSource) {
+        // ── 이어붙이기 경로: 소스를 건드리지 않는다 ───────────────────
+        // 카운트다운 묶음을 타임라인 위치로 다시 거는 경우가 여기 해당.
+        // setSource 를 하지 않으므로 디코딩 대기·끊김이 없다.
+        if (needsVolume) {
+          _volume = volume;
+          await player.setVolume(volume).timeout(_t);
+          if (gen != _gen) return;
+        }
+        await player.seek(Duration(milliseconds: startAtMs)).timeout(_t);
+        if (gen != _gen) return;
+        await player.resume().timeout(_t);
+        return;
+      }
+
+      // ── 새 소스 경로 ────────────────────────────────────────────────
+      _playingAsset = asset;
+      _sourceLoaded = false;
+
+      if (needsVolume) {
+        _volume = volume;
+        await player.setVolume(volume).timeout(_t);
+        if (gen != _gen) return;
+      }
+
       await player.setSource(AssetSource(asset)).timeout(_t);
       if (gen != _gen) return;
+      _sourceLoaded = true;
+
       if (startAtMs > 0) {
         await player.seek(Duration(milliseconds: startAtMs)).timeout(_t);
         if (gen != _gen) return;
       }
+
       await player.resume().timeout(_t);
     } catch (e) {
+      _sourceLoaded = false;
       if (kDebugMode) debugPrint('[$label] play failed($asset): $e');
     }
   }
@@ -420,6 +508,7 @@ class _Channel {
   /// 즉시 침묵. 세대를 올려 진행 중이던 재생도 함께 폐기한다.
   void stop() {
     _gen++;
+    // 소스는 그대로 두어, 같은 파일을 다시 걸 때 seek 만으로 이어지게 한다.
     if (AudioCoach._web.available) {
       AudioCoach._web.stopRole(label);
       return;
@@ -427,6 +516,13 @@ class _Channel {
     final player = _player;
     if (player == null) return;
     unawaited(player.stop().timeout(_t).catchError((_) {}));
+  }
+
+  /// 소스 캐시까지 버린다 (목소리가 바뀌었을 때).
+  void resetSource() {
+    stop();
+    _playingAsset = null;
+    _sourceLoaded = false;
   }
 
   Future<void> configure(AudioContextAndroid? ctx) async {
@@ -495,9 +591,9 @@ class AudioCoach {
     voiceVolume = c.voiceVolume;
     voiceStyle = c.voiceStyle;
     if (styleChanged) {
-      _seq.stop();
-      _count.stop();
-      _preview.stop();
+      _seq.resetSource();
+      _count.resetSource();
+      _preview.resetSource();
     }
   }
 
@@ -578,6 +674,7 @@ class AudioCoach {
   /// 상태에서 타이머가 먼저 흘러가 카운트다운이 어긋난다.
   Future<void> preloadForSession({VoiceStyle? style}) async {
     if (!_web.available) {
+      // 모바일은 warmUp() 이 실제 소스 준비까지 담당한다.
       _preloaded = true;
       return;
     }
@@ -597,7 +694,6 @@ class AudioCoach {
     if (kDebugMode) {
       debugPrint('preload: $ok/${assets.length} ready');
     }
-    // 목소리가 바뀌었을 수 있으므로 잠시 뒤 안내용 시퀀스도 확인한다.
   }
 
   static const List<String> _stateKeys = [
@@ -619,6 +715,11 @@ class AudioCoach {
       await preloadForSession();
       return;
     }
+    // 모바일: 실제로 소스를 미리 열어 둔다.
+    //
+    // 예전에는 로그만 찍고 아무것도 하지 않았다. 그래서 첫 안내에서
+    // `setSource` 가 자산 디코딩까지 기다리며 **첫 음이 늦게** 났고,
+    // 구간이 바뀔 때마다 그 지연이 반복됐다.
     final assets = <String>{};
     assets.addAll(Sfx.values.map((s) => s.asset));
     final map = seqDurMs[voiceStyle.assetKey];
@@ -628,6 +729,12 @@ class AudioCoach {
       }
     }
     assets.add('audio/cnt_${voiceStyle.assetKey}.wav');
+    // 가장 먼저 울릴 '준비' 안내와 카운트다운 묶음은 반드시 준비해 둔다.
+    await _seq.preload(
+      'audio/seq_${voiceStyle.assetKey}_prepare.wav',
+    );
+    await _count.preload('audio/cnt_${voiceStyle.assetKey}.wav');
+    await _sfx.preload(Sfx.work.asset);
     if (kDebugMode) debugPrint('warmUp: ${assets.length} assets ready');
   }
 
