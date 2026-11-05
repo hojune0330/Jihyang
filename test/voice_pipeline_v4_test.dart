@@ -44,33 +44,68 @@ void main() {
     return (sampleRate: sampleRate, dataBytes: dataBytes, dataStart: dataStart);
   }
 
-  /// 5ms 창 기준 발성 시작 위치 (ms)
-  double onsetMs(File f) {
+  /// 발성 시작 위치 (ms) — 노이즈 플로어 기준.
+  ///
+  /// ⚠️ 예전에는 `최대진폭 * 5%` 를 절대 임계값으로 썼다. 그러면
+  /// '삼/사' 의 조용한 ㅅ 마찰음이 그 선을 늦게 넘어서 온셋이 밀린다.
+  /// 실제로 여성 '삼' 이 18ms 로 잡혀 오탐이 났다 (실제로는 8ms).
+  /// tool/countdown_pipeline.py 의 onset_floor_ms 와 같은 식으로 바꾼다.
+  /// 파일의 [startMs, startMs+lenMs) 구간만 떼어 발성 시작을 잰다.
+  double onsetMsOfWindow(File f, double startMs, double lenMs,
+      {double frameMs = 1.0, double sustainMs = 8.0}) {
     final bytes = f.readAsBytesSync();
     final w = readWav(f);
     final bd = ByteData.sublistView(bytes);
-    const win = 221; // 5ms @ 44.1kHz
+    final w1 = (w.sampleRate * frameMs / 1000).round();
     final n = w.dataBytes ~/ 2;
+    final s0 = (startMs / 1000 * w.sampleRate).round().clamp(0, n);
+    final s1 = ((startMs + lenMs) / 1000 * w.sampleRate).round().clamp(0, n);
+    final frames = (s1 - s0) ~/ w1;
+    if (frames == 0) return -1;
 
-    var maxAmp = 0;
-    for (var k = 0; k < n; k++) {
-      final a = bd.getInt16(w.dataStart + k * 2, Endian.little).abs();
-      if (a > maxAmp) maxAmp = a;
-    }
-    if (maxAmp == 0) return -1;
-    final thr = (maxAmp * 0.05).round();
-    for (var f2 = 0; f2 * win + win <= n; f2++) {
-      var peak = 0;
-      for (var k = 0; k < win; k++) {
+    final env = Float64List(frames);
+    for (var i = 0; i < frames; i++) {
+      var m = 0;
+      for (var k = 0; k < w1; k++) {
         final a = bd
-            .getInt16(w.dataStart + (f2 * win + k) * 2, Endian.little)
+            .getInt16(w.dataStart + (s0 + i * w1 + k) * 2, Endian.little)
             .abs();
-        if (a > peak) peak = a;
+        if (a > m) m = a;
       }
-      if (peak > thr) return f2 * 5.0;
+      env[i] = m.toDouble();
+    }
+
+    final sorted = Float64List.fromList(env)..sort();
+    final floor = sorted[((frames - 1) * 0.10).round()];
+    var peak = 0.0;
+    for (final v in env) {
+      if (v > peak) peak = v;
+    }
+    if (peak <= 0) return -1;
+    final floorTerm = floor * 4.0 < peak * 0.02 ? floor * 4.0 : peak * 0.02;
+    final thr = floorTerm > peak * 0.012 ? floorTerm : peak * 0.012;
+    final need = (sustainMs / frameMs).round().clamp(1, frames);
+
+    var run = 0;
+    for (var i = 0; i < frames; i++) {
+      if (env[i] > thr) {
+        run++;
+        if (run >= need) return (i - need + 1) * frameMs;
+      } else {
+        run = 0;
+      }
     }
     return -1;
   }
+
+  double onsetMs(File f, {double frameMs = 1.0, double sustainMs = 8.0}) {
+    final w0 = readWav(f);
+    final totalMs = (w0.dataBytes ~/ 2) / w0.sampleRate * 1000;
+    return onsetMsOfWindow(f, 0, totalMs, frameMs: frameMs,
+        sustainMs: sustainMs);
+  }
+
+
 
   /// 클립 끝에서부터 세어 처음 발성이 나오는 위치 (끝에서 몇 ms)
   double tailVoiceMs(File f) {
@@ -165,41 +200,17 @@ void main() {
 
   group('C. 카운트다운 숫자가 1초 격자에 정확히 놓인다', () {
     test('cnt 파일에서 숫자가 1초 간격으로 시작한다', () {
+      // 묶음은 개별 클립을 그대로 i*1000ms 에 놓아 만든다.
+      // 1초 칸마다 따로 재야 한다 — 이웃 숫자의 여운이 섞이면
+      // 노이즈 플로어가 올라가 온셋이 밀리기 때문이다.
       for (final style in ['male', 'female', 'baby']) {
         final f = File('assets/audio/cnt_$style.wav');
         expect(f.existsSync(), true, reason: f.path);
-        final bytes = f.readAsBytesSync();
-        final w = readWav(f);
-        final bd = ByteData.sublistView(bytes);
-
-        // 각 숫자의 발성 시작을 찾아 0/1000/2000/3000/4000 과 비교
-        const win = 221;
-        final n = w.dataBytes ~/ 2;
-        var maxAmp = 0;
-        for (var k = 0; k < n; k++) {
-          final a = bd.getInt16(w.dataStart + k * 2, Endian.little).abs();
-          if (a > maxAmp) maxAmp = a;
-        }
-        final thr = (maxAmp * 0.04).round();
-
-        // i*1000ms 지점부터 250ms 안에서 첫 발성을 찾는다
         for (var i = 0; i < 5; i++) {
-          final base = (i * 1000 / 1000 * 44100).round();
-          var found = -1;
-          for (var k = base; k < base + 44100 * 250 ~/ 1000 && k < n; k++) {
-            final a = bd.getInt16(w.dataStart + k * 2, Endian.little).abs();
-            if (a > thr) {
-              found = k;
-              break;
-            }
-          }
-          expect(found, greaterThanOrEqualTo(0),
-              reason: '$style 숫자 ${5 - i} 를 찾지 못했다');
-          final offset = (found - base) / 44100 * 1000;
-          expect(offset, lessThan(15),
-              reason: '$style 숫자 ${5 - i}: ${offset.toStringAsFixed(0)}ms '
-                  '늦게 시작 (15ms 이내여야 한다)');
-          expect(win, greaterThan(0));
+          final on = onsetMsOfWindow(f, i * 1000, 1000);
+          expect(on, inInclusiveRange(0, 12),
+              reason: '$style 숫자 ${5 - i}: 칸 안 온셋 '
+                  '${on.toStringAsFixed(0)}ms (12ms 이내여야 한다)');
         }
       }
     });

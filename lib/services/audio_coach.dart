@@ -149,9 +149,9 @@ const Map<String, Map<String, int>> seqDurMs = {
 
 /// 5·4·3·2·1 이 1초 간격으로 들어 있는 묶음 파일의 길이(ms)
 const Map<String, int> cntDurMs = {
-  'male': 4307,
-  'female': 4419,
-  'baby': 4419,
+  'male': 4386,
+  'female': 4453,
+  'baby': 4388,
 };
 
 /// 묶음 안에서 숫자 '5' 가 시작하는 위치 = 0ms.
