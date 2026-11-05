@@ -80,31 +80,32 @@ const int beepLeadMs = 130;
 
 /// 목소리별 상태 안내 **음성만의** 길이(ms)
 ///
-/// v3 (elevenlabs/v4-tts + DSP) 실측값 — tool/build_voice_v3.py 산출.
+/// v4 실측값 — tool/voice_pipeline.py 산출.
+/// 잘림 0ms, 앞 무음 제거. 발성은 클립 시작 0~10ms 안에 시작한다.
 const Map<VoiceStyle, Map<StateVoice, int>> _stDurationMs = {
   VoiceStyle.male: {
-    StateVoice.prepare: 510,
-    StateVoice.startWork: 740,
-    StateVoice.startRest: 890,
-    StateVoice.setRest: 930,
-    StateVoice.lastRound: 930,
-    StateVoice.finish: 880,
+    StateVoice.prepare: 456,
+    StateVoice.startWork: 833,
+    StateVoice.startRest: 888,
+    StateVoice.setRest: 900,
+    StateVoice.lastRound: 923,
+    StateVoice.finish: 878,
   },
   VoiceStyle.female: {
-    StateVoice.prepare: 530,
-    StateVoice.startWork: 780,
-    StateVoice.startRest: 800,
-    StateVoice.setRest: 1010,
-    StateVoice.lastRound: 1020,
+    StateVoice.prepare: 441,
+    StateVoice.startWork: 873,
+    StateVoice.startRest: 788,
+    StateVoice.setRest: 1000,
+    StateVoice.lastRound: 993,
     StateVoice.finish: 950,
   },
   VoiceStyle.baby: {
-    StateVoice.prepare: 510,
-    StateVoice.startWork: 820,
-    StateVoice.startRest: 820,
-    StateVoice.setRest: 870,
-    StateVoice.lastRound: 990,
-    StateVoice.finish: 880,
+    StateVoice.prepare: 456,
+    StateVoice.startWork: 958,
+    StateVoice.startRest: 823,
+    StateVoice.setRest: 1018,
+    StateVoice.lastRound: 985,
+    StateVoice.finish: 883,
   },
 };
 
@@ -113,42 +114,42 @@ int stateVoiceDurationMs(VoiceStyle style, StateVoice v) =>
 
 /// 안내 시퀀스 파일의 **실제 길이**(ms) — tool/build_sequences.py 산출값.
 ///
-/// v3: 삑+음성 크로스페이드 합성, 간격 180/300ms.
+/// v4: 겹침 없는 이어붙이기, 간격 180/300ms, 삑 RMS 0.24.
 const Map<String, Map<String, int>> seqDurMs = {
   'male': {
-    'prepare': 808,
-    'startWork': 1038,
-    'startRest': 1188,
-    'setRest': 1228,
-    'lastRound': 1228,
-    'finish': 1178,
-    'workLast': 2256,
+    'prepare': 766,
+    'startWork': 1143,
+    'startRest': 1198,
+    'setRest': 1210,
+    'lastRound': 1233,
+    'finish': 1188,
+    'workLast': 2366,
   },
   'female': {
-    'prepare': 828,
-    'startWork': 1078,
+    'prepare': 751,
+    'startWork': 1183,
     'startRest': 1098,
-    'setRest': 1308,
-    'lastRound': 1318,
-    'finish': 1248,
-    'workLast': 2386,
+    'setRest': 1310,
+    'lastRound': 1303,
+    'finish': 1260,
+    'workLast': 2476,
   },
   'baby': {
-    'prepare': 808,
-    'startWork': 1118,
-    'startRest': 1118,
-    'setRest': 1168,
-    'lastRound': 1288,
-    'finish': 1178,
-    'workLast': 2396,
+    'prepare': 766,
+    'startWork': 1268,
+    'startRest': 1133,
+    'setRest': 1328,
+    'lastRound': 1295,
+    'finish': 1193,
+    'workLast': 2553,
   },
 };
 
 /// 5·4·3·2·1 이 1초 간격으로 들어 있는 묶음 파일의 길이(ms)
 const Map<String, int> cntDurMs = {
-  'male': 4470,
-  'female': 4480,
-  'baby': 4460,
+  'male': 4399,
+  'female': 4419,
+  'baby': 4419,
 };
 
 /// 묶음 안에서 숫자 '5' 가 시작하는 위치 = 0ms.

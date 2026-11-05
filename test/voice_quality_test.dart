@@ -125,7 +125,10 @@ void main() {
       expect(bad, isEmpty, reason: '경계가 급단된 파일: ${bad.join(', ')}');
     });
 
-    test('음성 클립 앞에 15ms, 뒤에 45ms 여백이 있다', () {
+    test('음성 클립은 시작 12ms 안에 발성되고, 끝은 조용하다', () {
+      // v4 에서는 **앞 무음을 제거**했다.
+      // 앞 무음이 68~220ms 있으면 안내가 그만큼 늦게 들려
+      // '숫자와 음성 싱크가 안 맞는' 것처럼 느껴졌기 때문이다.
       for (final style in ['male', 'female', 'baby']) {
         for (final key in [
           'prepare',
@@ -139,6 +142,7 @@ void main() {
           expect(f.existsSync(), true, reason: f.path);
           final bytes = f.readAsBytesSync();
           final w = readWav(f);
+
           var dataStart = 0;
           var i = 12;
           final bd = ByteData.sublistView(bytes);
@@ -152,17 +156,44 @@ void main() {
             i += 8 + size + (size.isOdd ? 1 : 0);
           }
           final bd2 = ByteData.sublistView(bytes);
-          // 앞 10ms 는 완전 무음이어야 한다
-          for (var k = 0; k < 441; k++) {
-            final s = bd2.getInt16(dataStart + k * 2, Endian.little);
-            expect(s, 0, reason: '${f.path} 앞 여백이 없다 (${k * 2}샘플)');
+          final n = w.dataBytes ~/ 2;
+
+          // (1) 발성 시작이 12ms 이내
+          const win = 221; // 5ms @ 44.1kHz
+          var maxAmp = 0;
+          for (var k = 0; k < n; k++) {
+            final a = bd2.getInt16(dataStart + k * 2, Endian.little).abs();
+            if (a > maxAmp) maxAmp = a;
           }
-          // 뒤 40ms 도 완전 무음
-          final tailStart = dataStart + w.dataBytes - 441 * 2 * 4;
-          for (var k = 0; k < 441 * 4; k++) {
-            final s = bd2.getInt16(tailStart + k * 2, Endian.little);
-            expect(s, 0, reason: '${f.path} 뒤 여백이 없다 (${k * 2}샘플)');
+          final thr = (maxAmp * 0.05).round();
+          var onsetWin = -1;
+          for (var f2 = 0; f2 * win + win <= n; f2++) {
+            var peak = 0;
+            for (var k = 0; k < win; k++) {
+              final a = bd2
+                  .getInt16(dataStart + (f2 * win + k) * 2, Endian.little)
+                  .abs();
+              if (a > peak) peak = a;
+            }
+            if (peak > thr) {
+              onsetWin = f2;
+              break;
+            }
           }
+          expect(onsetWin, greaterThanOrEqualTo(0), reason: f.path);
+          expect(onsetWin * 5, lessThanOrEqualTo(12),
+              reason: '${f.path} 발성 시작이 ${onsetWin * 5}ms 나 된다 '
+                  '(12ms 이내여야 한다)');
+
+          // (2) 끝 20ms 는 조용하다 (잘림/클릭 없음)
+          final tailStart = n - 221 * 4;
+          var tailPeak = 0;
+          for (var k = tailStart; k < n; k++) {
+            final a = bd2.getInt16(dataStart + k * 2, Endian.little).abs();
+            if (a > tailPeak) tailPeak = a;
+          }
+          expect(tailPeak, lessThan(655),
+              reason: '${f.path} 끝이 조용하지 않다 ($tailPeak)');
         }
       }
     });
