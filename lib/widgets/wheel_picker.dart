@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/glass/glass.dart';
 
 /// 아이폰 알람 스타일 휠 컬럼.
 ///
@@ -99,13 +100,18 @@ class _WheelColumnState extends State<WheelColumn> {
             top: (height - extent) / 2,
             height: extent,
             child: IgnorePointer(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppColors.tinted(widget.accent).withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(11),
-                  border: Border.all(
-                    color: widget.accent.withValues(alpha: 0.35),
-                    width: 1.1,
+              child: DecoratedBox(
+                decoration: ShapeDecoration(
+                  shape: GlassTokens.shape(
+                    GlassTokens.rXs,
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      width: GlassTokens.rimWidth,
+                    ),
+                  ),
+                  color: Color.alphaBlend(
+                    widget.accent.withValues(alpha: 0.10),
+                    GlassTokens.ink.withValues(alpha: 0.05),
                   ),
                 ),
               ),
@@ -271,66 +277,34 @@ Future<void> showWheelSheet({
   required VoidCallback onDone,
   Widget? extra,
 }) {
-  return showModalBottomSheet<void>(
+  return showGlassSheet<void>(
     context: context,
-    backgroundColor: AppColors.surface,
-    isScrollControlled: true,
-    showDragHandle: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-    ),
     builder: (ctx) => Padding(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 2,
-        bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 16.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.2,
-            ),
-          ),
+          Text(title, style: GlassTokens.title.copyWith(fontSize: 17.5)),
           const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              color: AppColors.textTertiary,
-              fontSize: 12,
-              height: 1.35,
-            ),
-          ),
+          Text(subtitle, style: GlassTokens.caption.copyWith(fontSize: 12)),
           const SizedBox(height: 14),
           picker,
           if (extra != null) extra,
           const SizedBox(height: 16),
-          SizedBox(
-            height: 52,
-            child: FilledButton(
-              onPressed: () {
-                onDone();
-                Navigator.of(ctx).pop();
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: accent,
-                foregroundColor: AppColors.ink,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(13),
-                ),
-              ),
-              child: const Text(
-                '완료',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-              ),
-            ),
+          GlassButton.filled(
+            label: '완료',
+            color: accent,
+            height: 54,
+            fontSize: 16,
+            radius: GlassTokens.rMd,
+            foreground: accent == AppColors.textPrimary
+                ? Colors.white
+                : AppColors.ink,
+            onPressed: () {
+              onDone();
+              Navigator.of(ctx).pop();
+            },
           ),
         ],
       ),

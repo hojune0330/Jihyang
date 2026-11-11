@@ -159,8 +159,30 @@ void main() {
     await _pump(tester, key, const SettingsScreen(initial: cfg));
     await _shot(tester, key, '2_settings');
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -700));
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 600));
     await _shot(tester, key, '2_settings_sound');
+  });
+
+  testWidgets('캡처: 휠 시트', (tester) async {
+    const key = ValueKey('shot');
+    await _pump(tester, key, const SettingsScreen(initial: cfg));
+    await tester.tap(find.text('운동 시간'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 600));
+    // 시트는 오버레이라 앱 전체를 찍는다
+    final dir = Directory('docs/glass/$_stage')..createSync(recursive: true);
+    await tester.runAsync(() async {
+      final layer = tester.binding.renderViews.first.debugLayer! as OffsetLayer;
+      final image = await layer.toImage(
+        Offset.zero & tester.view.physicalSize,
+        pixelRatio: 1,
+      );
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File(
+        '${dir.path}/2_settings_sheet.png',
+      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+    });
   });
 
   testWidgets('캡처: 운동 기록', (tester) async {

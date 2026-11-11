@@ -35,15 +35,29 @@ class GlassNavBar extends StatelessWidget implements PreferredSizeWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          AnimatedOpacity(
-            opacity: scrolled ? 1 : 0,
+          // 투명도 애니메이션 아래의 BackdropFilter 는 블러가 빠지는 경우가 있어
+          // (D4 캡처에서 확인) 띠를 직접 넣고 빼며 전환한다.
+          AnimatedSwitcher(
             duration: GlassTokens.state,
-            child: const GlassSurface(
-              material: GlassMaterial.thick,
-              radius: 0,
-              shadow: false,
-              child: SizedBox.expand(),
-            ),
+            child: scrolled
+                ? DecoratedBox(
+                    key: const ValueKey('bar'),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: GlassTokens.ink.withValues(alpha: 0.08),
+                          width: 0.6,
+                        ),
+                      ),
+                    ),
+                    child: const GlassSurface(
+                      material: GlassMaterial.thick,
+                      radius: 0,
+                      shadow: false,
+                      child: SizedBox.expand(),
+                    ),
+                  )
+                : const SizedBox.expand(key: ValueKey('none')),
           ),
           Padding(
             padding: EdgeInsets.fromLTRB(12, top + 8, 12, 8),
