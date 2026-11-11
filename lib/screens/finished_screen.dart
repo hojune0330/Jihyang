@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -5,9 +7,10 @@ import '../theme/glass/glass.dart';
 
 /// 화면 3 — 운동 완료 화면
 ///
-/// 글래스 시스템 §2 'finished' 배경(코랄·옐로 오브를 크게) 위에
-/// 완료 배지 → 총 운동 시간(가장 큰 유리 카드) → 세트/라운드 → 버튼 순.
-class FinishedScreen extends StatelessWidget {
+/// 주인공은 기록 화면과 같은 '활동 링'이다. 완료 라운드 비율만큼 채워지고
+/// 가운데에 완료 라운드 수를 둔다. (v1 의 체크 아이콘 배지는 범용 성공
+/// 일러스트라 제거 — v1.1 R1-12)
+class FinishedScreen extends StatefulWidget {
   const FinishedScreen({
     super.key,
     required this.sets,
@@ -28,6 +31,27 @@ class FinishedScreen extends StatelessWidget {
   final VoidCallback onHome;
 
   @override
+  State<FinishedScreen> createState() => _FinishedScreenState();
+}
+
+class _FinishedScreenState extends State<FinishedScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ring = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..forward();
+
+  @override
+  void dispose() {
+    _ring.dispose();
+    super.dispose();
+  }
+
+  double get _ratio => widget.totalRounds <= 0
+      ? 1
+      : (widget.rounds / widget.totalRounds).clamp(0.0, 1.0);
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: GlassTokens.ambientTop,
@@ -38,103 +62,69 @@ class FinishedScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 22),
             child: Column(
               children: [
-                const Spacer(flex: 2),
-                // 완료 배지 — 코랄 유리 원 + 체크
+                const Spacer(flex: 3),
+                const Text('운동 완료', style: GlassTokens.largeTitle),
+                const SizedBox(height: 6),
+                Text(
+                  _ratio >= 1 ? '모든 라운드를 마쳤어요' : '수고했어요',
+                  style: GlassTokens.label.copyWith(fontSize: 14),
+                ),
+                const SizedBox(height: 28),
                 SizedBox(
-                  width: 92,
-                  height: 92,
-                  child: GlassSurface(
-                    radius: GlassTokens.rPill,
-                    tint: AppColors.work,
-                    tintStrength: 2.2,
-                    child: const Center(
-                      child: Icon(
-                        Icons.check_rounded,
-                        size: 52,
-                        color: GlassTokens.workText,
+                  width: 200,
+                  height: 200,
+                  child: AnimatedBuilder(
+                    animation: _ring,
+                    builder: (_, _) => CustomPaint(
+                      painter: _ActivityRing(
+                        Curves.easeOutCubic.transform(_ring.value) * _ratio,
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${widget.rounds}',
+                              style: GlassTokens.number(56),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '/ ${widget.totalRounds} 라운드',
+                              style: GlassTokens.label,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-                const Text(
-                  '운동 완료',
-                  style: TextStyle(
-                    color: GlassTokens.ink,
-                    fontSize: 34,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.8,
-                  ),
-                ),
-                const SizedBox(height: 22),
-                // 총 운동 시간 — 가장 큰 카드
-                GlassSurface(
-                  material: GlassMaterial.regular,
-                  radius: GlassTokens.rLg,
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: Column(
-                      children: [
-                        Text(
-                          elapsedTime,
-                          style: const TextStyle(
-                            color: GlassTokens.ink,
-                            fontSize: 52,
-                            height: 1.0,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -1.6,
-                            fontFeatures: GlassTokens.tabular,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          '총 운동 시간',
-                          style: TextStyle(
-                            color: GlassTokens.sub,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.6,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: GlassTokens.s3),
-                Row(
+                const SizedBox(height: 32),
+                GlassSegments(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 12, 15),
                   children: [
-                    if (totalSets > 1)
-                      Expanded(
-                        child: _stat(
-                          '완료 세트',
-                          '$sets / $totalSets',
-                          GlassTokens.restText,
-                        ),
-                      ),
-                    if (totalSets > 1) const SizedBox(width: GlassTokens.s3),
-                    Expanded(
-                      child: _stat('완료 라운드', '$rounds', GlassTokens.prepText),
-                    ),
+                    _stat('총 운동 시간', elapsedTime),
+                    if (widget.totalSets > 1)
+                      _stat('완료 세트', '${widget.sets} / ${widget.totalSets}'),
                   ],
                 ),
-                const Spacer(flex: 3),
+                const Spacer(flex: 4),
                 GlassButton.filled(
                   label: '다시 시작',
-                  icon: Icons.replay_rounded,
                   color: AppColors.work,
-                  height: 70,
-                  fontSize: 20,
-                  onPressed: onRestart,
+                  height: 58,
+                  fontSize: 17,
+                  radius: GlassTokens.rLg,
+                  onPressed: widget.onRestart,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 GlassButton.glass(
                   label: '메인 화면으로',
-                  height: 60,
-                  fontSize: 17,
-                  onPressed: onHome,
+                  height: 54,
+                  fontSize: 16,
+                  radius: GlassTokens.rLg,
+                  onPressed: widget.onHome,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -144,7 +134,7 @@ class FinishedScreen extends StatelessWidget {
   }
 
   String get elapsedTime {
-    final total = (elapsedMs / 1000).round();
+    final total = (widget.elapsedMs / 1000).round();
     final h = total ~/ 3600;
     final m = (total % 3600) ~/ 60;
     final s = total % 60;
@@ -154,36 +144,52 @@ class FinishedScreen extends StatelessWidget {
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
-  Widget _stat(String label, String value, Color color) {
-    return GlassSurface(
-      radius: GlassTokens.rMd,
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: SizedBox(
-        width: double.infinity,
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                color: color,
-                fontSize: 26,
-                fontWeight: FontWeight.w900,
-                fontFeatures: GlassTokens.tabular,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: const TextStyle(
-                color: GlassTokens.sub,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
-        ),
-      ),
+  Widget _stat(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: GlassTokens.label.copyWith(fontSize: 12)),
+        const SizedBox(height: 6),
+        Text(value, style: GlassTokens.number(24)),
+      ],
     );
   }
+}
+
+/// 활동 링 — 옅은 트랙 위에 코랄 호. 끝은 둥글게.
+class _ActivityRing extends CustomPainter {
+  _ActivityRing(this.p);
+
+  final double p;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stroke = 16.0;
+    final c = size.center(Offset.zero);
+    final r = size.shortestSide / 2 - stroke / 2;
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..color = AppColors.work.withValues(alpha: 0.14),
+    );
+    if (p <= 0) return;
+    canvas.drawArc(
+      Rect.fromCircle(center: c, radius: r),
+      -math.pi / 2,
+      2 * math.pi * p,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = stroke
+        ..color = AppColors.work,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ActivityRing old) => old.p != p;
 }

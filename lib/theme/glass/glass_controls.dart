@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import 'glass_surface.dart';
 import 'glass_tokens.dart';
 
-/// 눌림 반응 (§5): 누르면 0.97배로 줄고, 놓으면 탄력 있게 돌아온다.
-/// 물결(ripple) 대신 쓴다.
+/// 눌림 반응: 누르면 0.97배로 줄고, 놓으면 탄력 있게 돌아온다 (ripple 대신).
 class GlassPressable extends StatefulWidget {
   const GlassPressable({
     super.key,
@@ -53,7 +52,7 @@ class _GlassPressableState extends State<GlassPressable> {
           duration: _down ? GlassTokens.pressIn : GlassTokens.pressOut,
           curve: _down ? Curves.easeOut : GlassTokens.pressOutCurve,
           child: AnimatedOpacity(
-            opacity: _enabled ? 1.0 : 0.45,
+            opacity: _enabled ? 1.0 : 0.4,
             duration: GlassTokens.state,
             child: widget.child,
           ),
@@ -65,7 +64,8 @@ class _GlassPressableState extends State<GlassPressable> {
 
 /// 주 버튼.
 ///
-/// - [GlassButton.filled]: 상태색이 진하게 물든 유리 (시작·다시 시작·저장)
+/// - [GlassButton.filled]: 단색 면 + 위쪽 1px 하이라이트 + 중립 그림자.
+///   v1 의 세로 그라데이션·같은 색 발광 그림자(글로시 버튼)는 제거 (R1-3).
 /// - [GlassButton.glass]: 무채 유리 (보조 동작)
 class GlassButton extends StatelessWidget {
   const GlassButton.filled({
@@ -74,10 +74,10 @@ class GlassButton extends StatelessWidget {
     required this.onPressed,
     required Color this.color,
     this.icon,
-    this.height = 64,
-    this.foreground = GlassTokens.ink,
-    this.fontSize = 19,
-    this.radius = GlassTokens.rLg,
+    this.height = 56,
+    this.foreground = Colors.white,
+    this.fontSize = 17,
+    this.radius = GlassTokens.rMd,
   }) : filled = true,
        onColor = false;
 
@@ -88,8 +88,8 @@ class GlassButton extends StatelessWidget {
     this.icon,
     this.height = 56,
     this.foreground = GlassTokens.ink,
-    this.fontSize = 16,
-    this.radius = GlassTokens.rLg,
+    this.fontSize = 17,
+    this.radius = GlassTokens.rMd,
     this.onColor = false,
   }) : color = null,
        filled = false;
@@ -111,7 +111,7 @@ class GlassButton extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (icon != null) ...[
-          Icon(icon, size: fontSize + 11, color: foreground),
+          Icon(icon, size: fontSize + 6, color: foreground),
           const SizedBox(width: 6),
         ],
         Flexible(
@@ -122,8 +122,8 @@ class GlassButton extends StatelessWidget {
             style: TextStyle(
               color: foreground,
               fontSize: fontSize,
-              fontWeight: FontWeight.w900,
-              letterSpacing: -0.4,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
             ),
           ),
         ),
@@ -133,7 +133,30 @@ class GlassButton extends StatelessWidget {
     final c = color;
     final Widget face;
     if (filled && c != null) {
-      face = _FilledGlass(color: c, radius: radius, child: content);
+      final shape = GlassBorder(radius: radius);
+      face = DecoratedBox(
+        decoration: ShapeDecoration(
+          shape: shape,
+          color: c,
+          shadows: [
+            BoxShadow(
+              color: GlassTokens.shadowInk.withValues(alpha: 0.12),
+              blurRadius: 16,
+              spreadRadius: -6,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            IgnorePointer(
+              child: CustomPaint(painter: _TopHighlight(radius: radius)),
+            ),
+            Center(child: content),
+          ],
+        ),
+      );
     } else {
       face = GlassSurface(
         material: onColor ? GlassMaterial.thin : GlassMaterial.regular,
@@ -151,92 +174,38 @@ class GlassButton extends StatelessWidget {
   }
 }
 
-/// 상태색으로 꽉 찬 유리 — 색 면 + 위쪽 광택 + rim + 같은 색 그림자.
-class _FilledGlass extends StatelessWidget {
-  const _FilledGlass({
-    required this.color,
-    required this.radius,
-    required this.child,
-  });
-
-  final Color color;
+/// 단색 버튼 위쪽 1px 안쪽 하이라이트
+class _TopHighlight extends CustomPainter {
+  _TopHighlight({required this.radius});
   final double radius;
-  final Widget child;
 
   @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.38),
-            blurRadius: 22,
-            spreadRadius: -4,
-            offset: const Offset(0, 10),
-          ),
-          BoxShadow(
-            color: GlassTokens.shadowInk.withValues(alpha: 0.06),
-            blurRadius: 3,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: ClipRSuperellipse(
-        borderRadius: BorderRadius.circular(radius),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color.alphaBlend(
-                      Colors.white.withValues(alpha: 0.18),
-                      color,
-                    ),
-                    color,
-                  ],
-                ),
-              ),
-            ),
-            // 위쪽 광택 (반사광)
-            IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.center,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.32),
-                      Colors.white.withValues(alpha: 0),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            DecoratedBox(
-              decoration: ShapeDecoration(
-                shape: GlassTokens.shape(
-                  radius,
-                  side: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.45),
-                    width: GlassTokens.rimWidth,
-                  ),
-                ),
-              ),
-            ),
-            Center(child: child),
+  void paint(Canvas canvas, Size size) {
+    final path = GlassBorder(
+      radius: radius,
+    ).getOuterPath((Offset.zero & size).deflate(0.5));
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const [0.0, 0.4],
+          colors: [
+            Colors.white.withValues(alpha: 0.35),
+            Colors.white.withValues(alpha: 0),
           ],
-        ),
-      ),
+        ).createShader(Offset.zero & size),
     );
   }
+
+  @override
+  bool shouldRepaint(covariant _TopHighlight old) => old.radius != radius;
 }
 
-/// 원형 유리 아이콘 버튼 (진행 화면 종료/건너뛰기, 상단 설정·뒤로가기)
+/// 원형 유리 아이콘 버튼
 class GlassIconButton extends StatelessWidget {
   const GlassIconButton({
     super.key,
@@ -248,13 +217,8 @@ class GlassIconButton extends StatelessWidget {
     this.onColor = false,
     this.material = GlassMaterial.regular,
     this.shadow = true,
-    this.darken = false,
+    this.deep,
   });
-
-  final bool darken;
-
-  /// 카드 안처럼 이미 유리 위에 놓일 때는 그림자를 끈다.
-  final bool shadow;
 
   final IconData icon;
   final VoidCallback? onPressed;
@@ -263,6 +227,8 @@ class GlassIconButton extends StatelessWidget {
   final Color iconColor;
   final bool onColor;
   final GlassMaterial material;
+  final bool shadow;
+  final Color? deep;
 
   @override
   Widget build(BuildContext context) {
@@ -280,10 +246,10 @@ class GlassIconButton extends StatelessWidget {
             onColor: onColor,
             shadow: shadow,
             blur: shadow,
-            darken: darken,
+            deep: deep,
             radius: GlassTokens.rPill,
             child: Center(
-              child: Icon(icon, size: size * 0.46, color: iconColor),
+              child: Icon(icon, size: size * 0.44, color: iconColor),
             ),
           ),
         ),
@@ -292,7 +258,7 @@ class GlassIconButton extends StatelessWidget {
   }
 }
 
-/// 알약 칩 (진행 화면 '다음 · 휴식', 상단 '운동 기록')
+/// 알약 칩
 class GlassChip extends StatelessWidget {
   const GlassChip({
     super.key,
@@ -301,12 +267,10 @@ class GlassChip extends StatelessWidget {
     this.onTap,
     this.color = GlassTokens.ink,
     this.onColor = false,
-    this.fontSize = 12.5,
+    this.fontSize = 13,
     this.dense = false,
-    this.darken = false,
+    this.deep,
   });
-
-  final bool darken;
 
   final String label;
   final IconData? icon;
@@ -315,15 +279,16 @@ class GlassChip extends StatelessWidget {
   final bool onColor;
   final double fontSize;
   final bool dense;
+  final Color? deep;
 
   @override
   Widget build(BuildContext context) {
     final chip = GlassSurface(
       material: GlassMaterial.thin,
       onColor: onColor,
-      darken: darken,
+      deep: deep,
       radius: GlassTokens.rPill,
-      shadow: !onColor,
+      shadow: false,
       padding: EdgeInsets.symmetric(
         horizontal: dense ? 11 : 14,
         vertical: dense ? 6 : 8,
@@ -332,7 +297,7 @@ class GlassChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: fontSize + 3, color: color),
+            Icon(icon, size: fontSize + 2, color: color),
             const SizedBox(width: 5),
           ],
           Flexible(
@@ -343,7 +308,8 @@ class GlassChip extends StatelessWidget {
               style: TextStyle(
                 color: color,
                 fontSize: fontSize,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.1,
                 fontFeatures: GlassTokens.tabular,
               ),
             ),
@@ -356,7 +322,7 @@ class GlassChip extends StatelessWidget {
   }
 }
 
-/// iOS 설정식 묶음 카드 — 행 사이에 얇은 구분선이 들어간 유리 그룹.
+/// iOS 설정식 묶음 카드 — 행 사이 hairline.
 class GlassGroup extends StatelessWidget {
   const GlassGroup({
     super.key,
@@ -379,8 +345,8 @@ class GlassGroup extends StatelessWidget {
           Padding(
             padding: EdgeInsets.only(left: inset),
             child: Container(
-              height: 0.6,
-              color: GlassTokens.ink.withValues(alpha: 0.10),
+              height: GlassTokens.hairline,
+              color: GlassTokens.separator,
             ),
           ),
         );
@@ -393,7 +359,53 @@ class GlassGroup extends StatelessWidget {
   }
 }
 
-/// 섹션 라벨 (§4-3 overline)
+/// 한 카드 안에 가로로 칸을 나눈다 (세로 hairline).
+class GlassSegments extends StatelessWidget {
+  const GlassSegments({
+    super.key,
+    required this.children,
+    this.radius = GlassTokens.rMd,
+    this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+  });
+
+  final List<Widget> children;
+  final double radius;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final cells = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      cells.add(
+        Expanded(
+          child: Padding(padding: padding, child: children[i]),
+        ),
+      );
+      if (i != children.length - 1) {
+        cells.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Container(
+              width: GlassTokens.hairline,
+              color: GlassTokens.separator,
+            ),
+          ),
+        );
+      }
+    }
+    return GlassSurface(
+      radius: radius,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: cells,
+        ),
+      ),
+    );
+  }
+}
+
+/// 섹션 라벨 — iOS 묶음 위 작은 제목
 class GlassSectionLabel extends StatelessWidget {
   const GlassSectionLabel(this.text, {super.key});
 
@@ -402,7 +414,7 @@ class GlassSectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(left: 6, top: 2, bottom: 8),
+      padding: const EdgeInsets.only(left: 16, top: 2, bottom: 7),
       child: Text(text, style: GlassTokens.overline),
     );
   }

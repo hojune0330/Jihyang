@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 
 import 'glass_tokens.dart';
 
-/// 유리 면 (§3) — 앱의 모든 카드/시트/버튼 바탕은 이 위젯 하나로 만든다.
+/// 유리 면 — 앱의 모든 카드/시트/버튼 바탕.
 ///
 /// 쌓는 순서 (아래 → 위)
-///  1. 그림자 2겹      2. 배경 블러      3. 면 채움(세로 그라데이션)
-///  4. 상태색 틴트     5. 위쪽 하이라이트  6. 그라데이션 rim 테두리   7. 콘텐츠
+///  1. 그림자 1겹    2. 배경 블러    3. 면 채움(단색)    4. 상태색 틴트(선택)
+///  5. 위쪽 1px 안쪽 하이라이트 + 가장자리 hairline    6. 콘텐츠
+///
+/// 모양은 [GlassBorder] 하나만 쓴다 (알약/원도 깨지지 않음).
 class GlassSurface extends StatelessWidget {
   const GlassSurface({
     super.key,
@@ -21,101 +23,62 @@ class GlassSurface extends StatelessWidget {
     this.onColor = false,
     this.shadow = true,
     this.blur = true,
-    this.darken = false,
+    this.deep,
   });
-
-  /// 밝은 상태색(준비 옐로) 위에서 흰 글자를 받치기 위해 면을 흰색 대신
-  /// 어두운 잉크로 채운다 (§4-4 대비 규칙, D6 캡처에서 확인).
-  final bool darken;
 
   final Widget child;
   final GlassMaterial material;
   final double radius;
   final EdgeInsetsGeometry padding;
-
-  /// 상태색 틴트 (선택)
   final Color? tint;
-
-  /// 틴트 세기 배율 (1.0 = 토큰 기본)
   final double tintStrength;
 
-  /// true 면 상태색(진행 화면) 배경 위에 놓인 유리
+  /// 상태색(진행 화면) 배경 위에 놓인 유리
   final bool onColor;
-
   final bool shadow;
-
-  /// 배경 블러 사용 여부. 같은 화면에 겹겹이 놓인 작은 요소는 끄면 성능이 좋다.
   final bool blur;
+
+  /// null 이 아니면 흰 유리 대신 이 색(밝은 배경의 진한 톤)으로 채운다.
+  final Color? deep;
 
   @override
   Widget build(BuildContext context) {
     final spec = GlassTokens.spec(material);
-    final br = BorderRadius.circular(radius);
-    // 알약/원(rPill)은 superellipse 대신 stadium 으로 그린다. 곡률이 변 길이의
-    // 절반을 넘는 superellipse 는 가장자리에 가시 잔상이 생긴다 (D3 실기 캡처).
-    final pill = radius >= 100;
-    ShapeBorder shapeOf() =>
-        pill ? const StadiumBorder() : GlassTokens.shape(radius);
-    final fill = onColor ? spec.fillOnColor : spec.fillLight;
+    final shape = GlassBorder(radius: radius);
+    final d = deep;
     final t = tint;
 
-    Color face(double a) {
-      final base = darken
-          ? GlassTokens.shadowInk.withValues(alpha: a * 0.9)
-          : Colors.white.withValues(alpha: a);
-      if (t == null) return base;
-      return Color.alphaBlend(
-        t.withValues(alpha: GlassTokens.tintAlpha * tintStrength),
-        base,
+    Color face;
+    if (d != null) {
+      face = d.withValues(alpha: 0.45 + spec.fillOnColor * 0.5);
+    } else {
+      face = Colors.white.withValues(
+        alpha: onColor ? spec.fillOnColor : spec.fillLight,
       );
+      if (t != null) {
+        face = Color.alphaBlend(
+          t.withValues(alpha: GlassTokens.tintAlpha * tintStrength),
+          face,
+        );
+      }
     }
 
-    final hl = darken
-        ? 0.10
-        : onColor
-        ? GlassTokens.highlightAlphaOnColor
-        : GlassTokens.highlightAlpha;
-
     Widget body = DecoratedBox(
-      decoration: ShapeDecoration(
-        shape: shapeOf(),
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [face(fill + 0.06), face(fill)],
-        ),
-      ),
+      decoration: ShapeDecoration(shape: shape, color: face),
       child: Stack(
         children: [
-          // 위쪽 하이라이트
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: ShapeDecoration(
-                  shape: shapeOf(),
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: const [0.0, GlassTokens.highlightStop],
-                    colors: [
-                      Colors.white.withValues(alpha: hl),
-                      Colors.white.withValues(alpha: 0),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
           Padding(padding: padding, child: child),
-          // rim 테두리 (위 밝음 → 아래 옅음)
           Positioned.fill(
             child: IgnorePointer(
               child: CustomPaint(
-                painter: _RimPainter(
+                painter: _EdgePainter(
                   radius: radius,
-                  pill: pill,
-                  top: Colors.white.withValues(alpha: spec.rimTop),
-                  bottom: Colors.white.withValues(alpha: spec.rimBottom),
+                  highlight: Colors.white.withValues(
+                    alpha: d != null ? 0.22 : spec.rim,
+                  ),
+                  hairline: (onColor || d != null)
+                      ? Colors.white.withValues(alpha: 0.16)
+                      : GlassTokens.shadowInk.withValues(alpha: 0.05),
                 ),
               ),
             ),
@@ -130,70 +93,59 @@ class GlassSurface extends StatelessWidget {
         child: body,
       );
     }
-
-    body = pill
-        ? ClipRRect(borderRadius: br, child: body)
-        : ClipRSuperellipse(borderRadius: br, child: body);
+    body = GlassClip(radius: radius, child: body);
 
     if (!shadow) return body;
-    // 그림자는 둥근 사각형으로 그린다 (흐린 그림자라 모양 차이는 안 보인다).
     return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: br,
-        boxShadow: GlassTokens.shadow(onColor: onColor),
+      decoration: ShapeDecoration(
+        shape: shape,
+        shadows: GlassTokens.shadow(onColor: onColor),
       ),
       child: body,
     );
   }
 }
 
-/// 위가 밝고 아래로 옅어지는 1px rim — 애플 유리 가장자리 반짝임
-class _RimPainter extends CustomPainter {
-  _RimPainter({
+/// 가장자리: 전체 hairline + 위쪽만 밝은 1px 하이라이트(빛은 위에서).
+class _EdgePainter extends CustomPainter {
+  _EdgePainter({
     required this.radius,
-    required this.pill,
-    required this.top,
-    required this.bottom,
+    required this.highlight,
+    required this.hairline,
   });
 
   final double radius;
-  final bool pill;
-  final Color top;
-  final Color bottom;
+  final Color highlight;
+  final Color hairline;
 
   @override
   void paint(Canvas canvas, Size size) {
-    const w = GlassTokens.rimWidth;
-    final rect = (Offset.zero & size).deflate(w / 2);
-    final path = Path();
-    if (pill) {
-      path.addRRect(
-        RRect.fromRectAndRadius(rect, Radius.circular(rect.shortestSide / 2)),
-      );
-    } else {
-      final r = Radius.circular((radius - w / 2).clamp(0, double.infinity));
-      path.addRSuperellipse(RSuperellipse.fromRectAndRadius(rect, r));
-    }
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = w
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          top,
-          bottom,
-          bottom.withValues(alpha: bottom.a * 1.6),
-        ],
-        stops: const [0.0, 0.55, 1.0],
-      ).createShader(Offset.zero & size);
-    canvas.drawPath(path, paint);
+    final rect = (Offset.zero & size).deflate(0.5);
+    final path = GlassBorder(radius: radius).getOuterPath(rect);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = hairline,
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const [0.0, 0.35],
+          colors: [highlight, highlight.withValues(alpha: 0)],
+        ).createShader(Offset.zero & size),
+    );
   }
 
   @override
-  bool shouldRepaint(covariant _RimPainter old) =>
+  bool shouldRepaint(covariant _EdgePainter old) =>
       old.radius != radius ||
-      old.pill != pill ||
-      old.top != top ||
-      old.bottom != bottom;
+      old.highlight != highlight ||
+      old.hairline != hairline;
 }

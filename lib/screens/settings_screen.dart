@@ -148,11 +148,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: GlassNavBar(
         title: '운동 설정',
         scrolled: _scrolled,
-        trailing: GlassChip(
-          label: '저장',
-          color: GlassTokens.workText,
-          fontSize: 15,
+        trailing: GlassPressable(
           onTap: () => Navigator.of(context).pop(_c),
+          semanticLabel: '저장',
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            child: Text(
+              '저장',
+              style: GlassTokens.title.copyWith(color: GlassTokens.tintText),
+            ),
+          ),
         ),
       ),
       body: GlassBackdrop.ambient(
@@ -173,13 +178,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               const GlassSectionLabel('운동 구성'),
               GlassGroup(
-                inset: 34,
                 children: [
                   _wheelRow(
                     label: '운동 시간',
                     value: fmtClock(_c.workSeconds),
                     accent: AppColors.work,
-                    valueColor: GlassTokens.workText,
+                    valueColor: GlassTokens.ink,
                     onTap: () => _openDuration(
                       title: '운동 시간',
                       subtitle: '한 라운드 동안 운동하는 시간입니다.',
@@ -193,7 +197,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     label: '휴식 시간',
                     value: fmtClock(_c.restSeconds),
                     accent: AppColors.rest,
-                    valueColor: GlassTokens.restText,
+                    valueColor: GlassTokens.ink,
                     onTap: () => _openDuration(
                       title: '휴식 시간',
                       subtitle: '라운드 사이에 쉬는 시간입니다. 0초면 휴식 없이 진행합니다.',
@@ -207,7 +211,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     label: '라운드',
                     value: '${_c.rounds}회',
                     accent: AppColors.prepare,
-                    valueColor: GlassTokens.prepText,
+                    valueColor: GlassTokens.ink,
                     onTap: () => _openCount(
                       title: '라운드',
                       subtitle: '한 세트 안에서 운동을 반복하는 횟수입니다.',
@@ -240,7 +244,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       label: '세트 간 휴식',
                       value: fmtClock(_c.setRestSeconds),
                       accent: AppColors.rest,
-                      valueColor: GlassTokens.restText,
+                      valueColor: GlassTokens.ink,
                       onTap: () => _openDuration(
                         title: '세트 간 휴식',
                         subtitle: '세트가 바뀔 때 쉬는 시간입니다. 마지막 세트 뒤에는 적용되지 않습니다.',
@@ -290,7 +294,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     label: '효과음 볼륨',
                     value: _c.sfxVolume,
                     accent: AppColors.work,
-                    valueColor: GlassTokens.workText,
+                    valueColor: GlassTokens.ink,
                     enabled: _c.soundEnabled && _c.sfxEnabled,
                     onChanged: (v) => _update(_c.copyWith(sfxVolume: v)),
                     onPreview: () => AudioCoach.instance.previewSfx(Sfx.work),
@@ -307,7 +311,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     label: '음성 볼륨',
                     value: _c.voiceVolume,
                     accent: AppColors.prepare,
-                    valueColor: GlassTokens.prepText,
+                    valueColor: GlassTokens.ink,
                     enabled: _c.soundEnabled && _c.voiceEnabled,
                     onChanged: (v) => _update(_c.copyWith(voiceVolume: v)),
                     onPreview: () =>
@@ -315,7 +319,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: GlassTokens.s3),
+              const SizedBox(height: 26),
               _voiceStyleSection(),
               if (!_c.soundEnabled) ...[
                 const SizedBox(height: 12),
@@ -388,9 +392,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text(
               fmtKorean(current),
               style: TextStyle(
-                color: _textOf(accent),
+                color: GlassTokens.sub,
                 fontSize: 13,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
@@ -439,9 +443,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text(
               '$current$suffix',
               style: TextStyle(
-                color: _textOf(accent),
+                color: GlassTokens.sub,
                 fontSize: 13,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w600,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
@@ -449,14 +453,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
-  }
-
-  /// 상태색(면 색) → 흰 유리 위 글자용 진한 색 (§4-4)
-  static Color _textOf(Color accent) {
-    if (accent == AppColors.work) return GlassTokens.workText;
-    if (accent == AppColors.rest) return GlassTokens.restText;
-    if (accent == AppColors.prepare) return GlassTokens.prepText;
-    return GlassTokens.ink;
   }
 
   // ------------------------------------------------------------ 행 위젯
@@ -473,36 +469,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       scale: 0.985,
       semanticLabel: label,
       child: SizedBox(
-        height: 60,
+        height: 54,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
           child: Row(
             children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: accent,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 10),
               Text(label, style: GlassTokens.body),
               const Spacer(),
               Text(
                 value,
-                style: TextStyle(
+                style: GlassTokens.number(
+                  19,
                   color: valueColor,
-                  fontSize: 21,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.4,
-                  fontFeatures: GlassTokens.tabular,
-                ),
+                ).copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.3),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
               const Icon(
-                Icons.unfold_more_rounded,
-                size: 19,
+                Icons.chevron_right_rounded,
+                size: 22,
                 color: GlassTokens.tert,
               ),
             ],
@@ -554,9 +538,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(width: 8),
             _GlassSwitch(
               value: value,
-              accent: accent == AppColors.textPrimary
-                  ? const Color(0xFF34C759)
-                  : accent,
+              accent: GlassTokens.tint,
               onChanged: enabled ? onChanged : null,
             ),
           ],
@@ -584,30 +566,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               Text(
                 label,
-                style: GlassTokens.caption.copyWith(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  color: dim ? GlassTokens.tert : GlassTokens.sub,
+                style: GlassTokens.body.copyWith(
+                  color: dim ? GlassTokens.tert : GlassTokens.ink,
                 ),
               ),
               const Spacer(),
               Text(
                 '${(value * 100).round()}%',
                 style: TextStyle(
-                  color: dim ? GlassTokens.tert : valueColor,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
+                  color: dim ? GlassTokens.tert : GlassTokens.sub,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                   fontFeatures: GlassTokens.tabular,
                 ),
               ),
               const SizedBox(width: 8),
-              GlassChip(
-                label: '미리 듣기',
-                icon: Icons.play_arrow_rounded,
-                color: dim ? GlassTokens.tert : GlassTokens.ink,
-                fontSize: 11.5,
-                dense: true,
+              GlassPressable(
                 onTap: dim ? null : onPreview,
+                semanticLabel: '미리 듣기',
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 6,
+                  ),
+                  child: Text(
+                    '미리 듣기',
+                    style: GlassTokens.label.copyWith(
+                      color: GlassTokens.tintText,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -616,7 +604,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               trackHeight: 5,
               activeTrackColor: dim
                   ? GlassTokens.tert.withValues(alpha: 0.4)
-                  : accent,
+                  : GlassTokens.tint,
               inactiveTrackColor: GlassTokens.ink.withValues(alpha: 0.08),
               thumbColor: Colors.white,
               thumbShape: const RoundSliderThumbShape(
@@ -640,27 +628,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _voiceStyleSection() {
     final enabled = _c.soundEnabled && _c.voiceEnabled;
-    return GlassSurface(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '목소리 종류',
-            style: GlassTokens.headline.copyWith(
-              fontSize: 14,
-              color: enabled ? GlassTokens.ink : GlassTokens.tert,
-            ),
-          ),
-          const SizedBox(height: 2),
-          const Text('각 목소리를 눌러 미리 들어볼 수 있습니다.', style: GlassTokens.caption),
-          const SizedBox(height: 10),
-          for (final style in VoiceStyle.values) ...[
-            _voiceTile(style, enabled),
-            if (style != VoiceStyle.values.last) const SizedBox(height: 8),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const GlassSectionLabel('목소리 종류'),
+        GlassGroup(
+          children: [
+            for (final style in VoiceStyle.values) _voiceTile(style, enabled),
           ],
-        ],
-      ),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Text('각 목소리를 눌러 미리 들어볼 수 있습니다.', style: GlassTokens.caption),
+        ),
+      ],
     );
   }
 
@@ -673,93 +654,95 @@ class _SettingsScreenState extends State<SettingsScreen> {
               AudioCoach.instance.previewVoice(style);
             }
           : null,
-      scale: 0.98,
+      scale: 0.985,
       semanticLabel: style.label,
-      child: AnimatedContainer(
-        duration: GlassTokens.state,
-        curve: GlassTokens.stateCurve,
-        padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
-        decoration: ShapeDecoration(
-          shape: GlassTokens.shape(
-            GlassTokens.rSm,
-            side: BorderSide(
-              color: selected
-                  ? AppColors.prepare.withValues(alpha: 0.9)
-                  : Colors.white.withValues(alpha: 0.7),
-              width: selected ? 1.6 : 1,
-            ),
-          ),
-          color: selected
-              ? Color.alphaBlend(
-                  AppColors.prepare.withValues(alpha: 0.22),
-                  Colors.white.withValues(alpha: 0.6),
-                )
-              : Colors.white.withValues(alpha: 0.45),
-        ),
-        child: Row(
-          children: [
-            AnimatedSwitcher(
-              duration: GlassTokens.state,
-              child: Icon(
-                selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-                key: ValueKey(selected),
-                size: 21,
-                color: selected ? GlassTokens.prepText : GlassTokens.tert,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                style.label,
-                style: GlassTokens.body.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: enabled ? GlassTokens.ink : GlassTokens.tert,
+      child: SizedBox(
+        height: 52,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 6, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  style.label,
+                  style: GlassTokens.body.copyWith(
+                    color: enabled ? GlassTokens.ink : GlassTokens.tert,
+                  ),
                 ),
               ),
-            ),
-            IconButton(
-              onPressed: enabled
-                  ? () => AudioCoach.instance.previewVoice(style)
-                  : null,
-              iconSize: 20,
-              tooltip: '미리 듣기',
-              icon: Icon(
-                Icons.volume_up_rounded,
-                color: enabled ? GlassTokens.prepText : GlassTokens.tert,
+              AnimatedOpacity(
+                duration: GlassTokens.state,
+                opacity: selected ? 1 : 0,
+                child: const Icon(
+                  Icons.check_rounded,
+                  size: 22,
+                  color: GlassTokens.tintText,
+                ),
               ),
-            ),
-          ],
+              IconButton(
+                onPressed: enabled
+                    ? () => AudioCoach.instance.previewVoice(style)
+                    : null,
+                iconSize: 20,
+                tooltip: '미리 듣기',
+                icon: Icon(
+                  Icons.play_circle_outline_rounded,
+                  color: enabled ? GlassTokens.sub : GlassTokens.tert,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _presetSection() {
+    final full = _presets.length >= PresetStore.maxPresets;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        GlassButton.filled(
-          label: '현재 구성 저장',
-          icon: Icons.add_rounded,
-          color: AppColors.work,
-          height: 50,
-          fontSize: 14.5,
-          radius: GlassTokens.rMd,
-          onPressed: _presets.length >= PresetStore.maxPresets
-              ? null
-              : _savePreset,
+        GlassGroup(
+          children: [
+            for (final p in _presets) _presetTile(p),
+            GlassPressable(
+              onTap: full ? null : _savePreset,
+              scale: 0.985,
+              semanticLabel: '현재 구성 저장',
+              child: SizedBox(
+                height: 52,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.add_rounded,
+                        size: 22,
+                        color: GlassTokens.tintText,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '현재 구성 저장',
+                        style: GlassTokens.body.copyWith(
+                          color: GlassTokens.tintText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 10),
         if (_presets.isEmpty)
           const Padding(
-            padding: EdgeInsets.fromLTRB(8, 4, 8, 0),
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Text(
               '자주 쓰는 운동 구성을 저장해 두면 여기서 바로 불러올 수 있어요.',
               style: GlassTokens.caption,
             ),
-          )
-        else
-          GlassGroup(children: [for (final p in _presets) _presetTile(p)]),
+          ),
       ],
     );
   }
@@ -783,8 +766,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     p.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GlassTokens.headline.copyWith(
-                      fontWeight: FontWeight.w900,
+                    style: GlassTokens.body.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -793,10 +776,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     '${c.sets > 1 ? ' · ${c.sets}세트' : ''}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GlassTokens.caption.copyWith(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: GlassTokens.caption,
                   ),
                 ],
               ),
@@ -816,82 +796,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _summaryCard() {
-    return GlassSurface(
-      material: GlassMaterial.thin,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Text(
-                '총 소요 시간',
-                style: TextStyle(
-                  color: GlassTokens.sub,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                fmtKorean(_c.totalSeconds),
-                style: const TextStyle(
-                  color: GlassTokens.ink,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.3,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          Row(
-            children: [
-              const Text(
-                '총 라운드',
-                style: TextStyle(
-                  color: GlassTokens.sub,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${_c.totalRounds}회  (${_c.rounds}회 × ${_c.sets}세트)',
-                style: const TextStyle(
-                  color: GlassTokens.ink,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          Row(
-            children: [
-              const Text(
-                '준비 시간',
-                style: TextStyle(
-                  color: GlassTokens.sub,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${TabataConfig.prepareSeconds}초 (고정)',
-                style: const TextStyle(
-                  color: GlassTokens.ink,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
-          ),
-        ],
+    Widget row(String k, String v, {bool strong = false}) => SizedBox(
+      height: 46,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            Text(k, style: GlassTokens.body.copyWith(color: GlassTokens.sub)),
+            const Spacer(),
+            Text(
+              v,
+              style: strong
+                  ? GlassTokens.number(17).copyWith(fontWeight: FontWeight.w700)
+                  : GlassTokens.body.copyWith(
+                      fontFeatures: GlassTokens.tabular,
+                    ),
+            ),
+          ],
+        ),
       ),
+    );
+    return GlassGroup(
+      children: [
+        row('총 소요 시간', fmtKorean(_c.totalSeconds), strong: true),
+        row('총 라운드', '${_c.totalRounds}회 (${_c.rounds}회 × ${_c.sets}세트)'),
+        row('준비 시간', '${TabataConfig.prepareSeconds}초 (고정)'),
+      ],
     );
   }
 }
@@ -918,7 +848,7 @@ class _GlassSwitch extends StatelessWidget {
         onTap: enabled ? () => onChanged!(!value) : null,
         child: AnimatedOpacity(
           duration: GlassTokens.state,
-          opacity: enabled ? 1 : 0.45,
+          opacity: enabled ? 1 : 0.35,
           child: AnimatedContainer(
             duration: GlassTokens.state,
             curve: GlassTokens.stateCurve,
@@ -927,7 +857,9 @@ class _GlassSwitch extends StatelessWidget {
             padding: const EdgeInsets.all(2.5),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              color: value ? accent : GlassTokens.ink.withValues(alpha: 0.12),
+              color: value && enabled
+                  ? accent
+                  : GlassTokens.ink.withValues(alpha: 0.12),
               border: Border.all(
                 color: Colors.white.withValues(alpha: value ? 0.5 : 0.8),
                 width: 1,

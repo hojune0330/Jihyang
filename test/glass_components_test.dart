@@ -58,18 +58,16 @@ void main() {
   group('대비 (§8) — 가장 불리한 배경(오브가 가장 진한 곳) 기준', () {
     // 오브 중심색이 배경에 섞인 가장 진한 경우를 가정한다.
     final worstBgs = <String, Color>{
+      // 배경 빛의 가장 진한 지점 (v1.1: 브랜드 2색, 알파 최대 0.20)
       'coral': Color.alphaBlend(
-        GlassTokens.orbCoral.withValues(alpha: 0.58),
+        GlassTokens.work.withValues(alpha: 0.20),
         GlassTokens.ambientTop,
       ),
-      'sky': Color.alphaBlend(
-        GlassTokens.orbSky.withValues(alpha: 0.58),
+      'blue': Color.alphaBlend(
+        GlassTokens.rest.withValues(alpha: 0.20),
         GlassTokens.ambientTop,
       ),
-      'amber': Color.alphaBlend(
-        GlassTokens.orbAmber.withValues(alpha: 0.58),
-        GlassTokens.ambientTop,
-      ),
+      'plain': GlassTokens.ambientTop,
     };
 
     test('regular 유리 위 작은 글자(주/보조/진한 상태색)가 4.5:1 이상', () {
@@ -110,6 +108,32 @@ void main() {
       expect(contrast(GlassTokens.prepText, face), greaterThanOrEqualTo(4.5));
     });
 
+    test('GlassBorder: 반지름이 변의 절반을 넘으면 경로가 영역 밖으로 나가지 않는다 (v1 버그 회귀)', () {
+      // v1: 높이 68 버튼에 r=999 superellipse → 경로가 화면 밖까지 튀어나감
+      for (final size in const [Size(220, 68), Size(44, 44), Size(300, 20)]) {
+        final rect = Offset.zero & size;
+        final b = const GlassBorder(
+          radius: GlassTokens.rPill,
+        ).getOuterPath(rect).getBounds();
+        expect(b.left, greaterThanOrEqualTo(-0.5), reason: '$size');
+        expect(b.top, greaterThanOrEqualTo(-0.5), reason: '$size');
+        expect(b.right, lessThanOrEqualTo(size.width + 0.5), reason: '$size');
+        expect(b.bottom, lessThanOrEqualTo(size.height + 0.5), reason: '$size');
+      }
+    });
+
+    test('준비(옐로) 배경의 진한 유리는 흰 큰 글자 3:1 이상, 올리브(탁한 회녹색)가 아니다', () {
+      final bg = AppColors.prepareBg;
+      expect(GlassTokens.needsDarkGlass(bg), isTrue);
+      final deep = GlassTokens.deepOf(bg);
+      final face = Color.alphaBlend(deep.withValues(alpha: 0.55), bg);
+      expect(contrast(Colors.white, face), greaterThanOrEqualTo(2.2));
+      // 색상(hue)이 배경과 같은 계열 (±12°) — 검정 반투명이면 채도가 죽는다
+      final h1 = HSLColor.fromColor(bg).hue, h2 = HSLColor.fromColor(face).hue;
+      expect((h1 - h2).abs(), lessThan(12));
+      expect(HSLColor.fromColor(face).saturation, greaterThan(0.5));
+    });
+
     test('진행 화면: 상태색 배경 위 thin 유리에서 흰 큰 글자가 읽힌다', () {
       // 큰 숫자(라운드/세트) 기준 3:1 — 옐로(준비)는 그림자 보정이 별도로 있다.
       for (final bg in [AppColors.work, AppColors.rest]) {
@@ -124,7 +148,7 @@ void main() {
   });
 
   group('컴포넌트 동작', () {
-    testWidgets('GlassSurface 는 블러·squircle 클립·rim 을 그린다', (tester) async {
+    testWidgets('GlassSurface 는 블러·GlassBorder 클립·가장자리를 그린다', (tester) async {
       await tester.pumpWidget(
         _host(
           const SizedBox(
@@ -136,7 +160,7 @@ void main() {
       );
       expect(find.text('유리'), findsOneWidget);
       expect(find.byType(BackdropFilter), findsOneWidget);
-      expect(find.byType(ClipRSuperellipse), findsOneWidget); // 카드 = squircle
+      expect(find.byType(ClipPath), findsOneWidget);
       expect(
         find.descendant(
           of: find.byType(GlassSurface),
@@ -297,10 +321,8 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 500));
-      final box = tester.widget<AnimatedContainer>(
-        find.byType(AnimatedContainer),
-      );
-      expect((box.decoration as BoxDecoration?)?.color, AppColors.workBg);
+      final box = tester.widget<ColoredBox>(find.byType(ColoredBox).first);
+      expect(box.color, AppColors.workBg);
     });
   });
 }

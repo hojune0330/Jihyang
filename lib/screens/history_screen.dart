@@ -123,64 +123,40 @@ class _HistoryScreenState extends State<HistoryScreen> {
         .where((d) => d.year == _month.year && d.month == _month.month)
         .length;
 
-    return Row(
+    return GlassSegments(
+      padding: const EdgeInsets.fromLTRB(16, 13, 10, 14),
       children: [
         _stat('운동한 날', '$days', '일'),
-        const SizedBox(width: 10),
         _stat('완료', '$done', '회'),
-        const SizedBox(width: 10),
         _stat('운동 시간', fmtKoreanShort(activeSec), ''),
       ],
     );
   }
 
   Widget _stat(String label, String value, String unit) {
-    return Expanded(
-      child: GlassSurface(
-        radius: GlassTokens.rMd,
-        padding: const EdgeInsets.fromLTRB(13, 12, 12, 13),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                color: GlassTokens.tert,
-                fontWeight: FontWeight.w700,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: GlassTokens.label.copyWith(fontSize: 12)),
+        const SizedBox(height: 6),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: value, style: GlassTokens.number(22)),
+                if (unit.isNotEmpty)
+                  TextSpan(
+                    text: ' $unit',
+                    style: GlassTokens.label.copyWith(fontSize: 12.5),
+                  ),
+              ],
             ),
-            const SizedBox(height: 4),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: value,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        color: GlassTokens.ink,
-                      ),
-                    ),
-                    if (unit.isNotEmpty)
-                      TextSpan(
-                        text: ' $unit',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: GlassTokens.sub,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -211,11 +187,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 child: Text(
                   '${_month.year}년 ${_month.month}월',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    color: GlassTokens.ink,
-                  ),
+                  style: GlassTokens.title,
                 ),
               ),
               GlassIconButton(
@@ -241,8 +213,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     child: Text(
                       w,
                       style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                         color: w == '일'
                             ? GlassTokens.workText
                             : w == '토'
@@ -295,7 +267,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     Map<DateTime, List<WorkoutRecord>> byDay,
   ) {
     if (dayNum < 1 || dayNum > daysInMonth) {
-      return const SizedBox(height: 62);
+      return const SizedBox(height: 56);
     }
     final date = DateTime(_month.year, _month.month, dayNum);
     final items = byDay[date];
@@ -306,42 +278,41 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final done = items?.any((r) => r.isCompleted) ?? false;
 
     return GestureDetector(
-      onTap: () => setState(() => _selected = date),
+      onTap: isFuture ? null : () => setState(() => _selected = date),
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        height: 62,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 46,
-              height: 46,
-              child: CustomPaint(
-                painter: _RingPainter(
-                  progress: ring,
-                  done: done,
-                  selected: selected,
-                ),
-                child: Center(
-                  child: Text(
-                    '$dayNum',
-                    style: TextStyle(
-                      fontSize: 16,
-                      height: 1.0,
-                      fontWeight: isToday || selected
-                          ? FontWeight.w900
-                          : FontWeight.w700,
-                      color: isFuture
-                          ? GlassTokens.tert.withValues(alpha: 0.5)
-                          : (selected && ring != null && done)
-                          ? Colors.white
-                          : GlassTokens.ink,
-                    ),
+        height: 56,
+        child: Center(
+          child: SizedBox(
+            width: 42,
+            height: 42,
+            child: CustomPaint(
+              painter: _RingPainter(
+                progress: ring,
+                done: done,
+                selected: selected,
+                showTrack: !isFuture,
+              ),
+              child: Center(
+                child: Text(
+                  '$dayNum',
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.0,
+                    fontWeight: isToday || selected
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                    fontFeatures: GlassTokens.tabular,
+                    color: isFuture
+                        ? GlassTokens.tert.withValues(alpha: 0.55)
+                        : isToday
+                        ? GlassTokens.workText
+                        : GlassTokens.ink,
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -363,11 +334,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           padding: const EdgeInsets.only(left: 4, bottom: 10),
           child: Text(
             '${day.month}월 ${day.day}일 ($wd)',
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-              color: GlassTokens.ink,
-            ),
+            style: GlassTokens.headline,
           ),
         ),
         if (items.isEmpty)
@@ -376,11 +343,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
             padding: EdgeInsets.symmetric(vertical: 28),
             child: Column(
               children: [
-                Icon(
-                  Icons.self_improvement_rounded,
-                  size: 30,
-                  color: GlassTokens.tert,
-                ),
                 SizedBox(height: 8, width: double.infinity),
                 Text(
                   '이 날은 운동 기록이 없습니다',
@@ -405,30 +367,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Widget _recordCard(WorkoutRecord r) {
     final accent = r.isCompleted ? GlassTokens.workText : GlassTokens.sub;
     return GlassSurface(
-      tint: r.isCompleted ? AppColors.work : null,
-      tintStrength: 0.5,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                width: 9,
-                height: 9,
-                decoration: BoxDecoration(
-                  color: accent,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8),
               Text(
                 r.isCompleted ? '운동 완료' : '중도 종료',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
-                  color: accent,
-                ),
+                style: GlassTokens.headline.copyWith(color: accent),
               ),
               const Spacer(),
               Text(
@@ -502,8 +449,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
         Text(
           v,
           style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w900,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
             color: GlassTokens.ink,
             fontFeatures: [FontFeature.tabularFigures()],
           ),
@@ -514,21 +461,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _kv(String k, String v) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Text(
-            k,
-            style: const TextStyle(fontSize: 12.5, color: GlassTokens.tert),
-          ),
-          const Spacer(),
-          Flexible(
+          Text(k, style: GlassTokens.label),
+          const SizedBox(width: 12),
+          Expanded(
             child: Text(
               v,
               textAlign: TextAlign.right,
               style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
                 color: GlassTokens.ink,
                 fontFeatures: [FontFeature.tabularFigures()],
               ),
@@ -543,69 +487,66 @@ class _HistoryScreenState extends State<HistoryScreen> {
       '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 }
 
-/// 애플워치 활동 링 — 배경 트랙 + 진행 호. 완료한 날은 꽉 찬 링.
+/// 애플워치 활동 링 — 지난 날만 옅은 트랙, 기록이 있으면 진행 호.
+/// 완료한 날은 링을 꽉 채우고, 선택한 날은 안쪽을 옅은 잉크로 채운다.
 class _RingPainter extends CustomPainter {
   _RingPainter({
     required this.progress,
     required this.done,
     required this.selected,
+    required this.showTrack,
   });
 
-  /// null 이면 기록 없음(트랙만), 0~1 이면 진행 호
   final double? progress;
   final bool done;
   final bool selected;
+  final bool showTrack;
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
-    final radius = size.width / 2 - 3;
-    const stroke = 4.0;
-
-    final track = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..color = GlassTokens.ink.withValues(alpha: 0.08);
-    canvas.drawCircle(center, radius, track);
-
-    final p = progress;
-    if (p != null) {
-      final arc = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeWidth = stroke
-        ..color = AppColors.work;
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        -1.5708, // 12시 방향에서 시작
-        6.28318 * p,
-        false,
-        arc,
-      );
-      if (done) {
-        // 완료한 날은 안쪽을 옅게 채워 강조
-        canvas.drawCircle(
-          center,
-          radius - stroke / 2 - 1,
-          Paint()
-            ..color = AppColors.work.withValues(alpha: selected ? 1.0 : 0.14),
-        );
-      }
-    }
+    const stroke = 3.5;
+    final radius = size.width / 2 - stroke / 2;
 
     if (selected) {
       canvas.drawCircle(
         center,
-        radius + 3,
+        radius - stroke,
+        Paint()..color = GlassTokens.ink.withValues(alpha: 0.07),
+      );
+    }
+    if (showTrack) {
+      canvas.drawCircle(
+        center,
+        radius,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.4
-          ..color = GlassTokens.ink.withValues(alpha: 0.7),
+          ..strokeWidth = stroke
+          ..color = GlassTokens.ink.withValues(alpha: 0.05),
+      );
+    }
+    final p = progress;
+    if (p != null) {
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        -1.5708,
+        6.28318 * p,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = stroke
+          ..color = done
+              ? AppColors.work
+              : AppColors.work.withValues(alpha: 0.55),
       );
     }
   }
 
   @override
   bool shouldRepaint(covariant _RingPainter old) =>
-      old.progress != progress || old.done != done || old.selected != selected;
+      old.progress != progress ||
+      old.done != done ||
+      old.selected != selected ||
+      old.showTrack != showTrack;
 }

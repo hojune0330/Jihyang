@@ -43,6 +43,19 @@ class RunningScreen extends StatelessWidget {
     final fg = AppColors.onBgOf(type);
     final paused = engine.isPaused;
 
+    // 배경(360ms)과 위 요소의 색이 같은 시간에 바뀌도록 묶는다.
+    // 배경만 애니메이션하면 전환 순간 이전 색 배경 위에 다음 색 요소가
+    // 먼저 그려져 '파란 화면에 코랄 진행선' 같은 프레임이 생긴다.
+    return TweenAnimationBuilder<Color?>(
+      tween: ColorTween(end: bg),
+      duration: GlassTokens.phase,
+      curve: GlassTokens.phaseCurve,
+      builder: (context, animBg, _) =>
+          _scaffold(animBg ?? bg, fg, phase, paused),
+    );
+  }
+
+  Widget _scaffold(Color bg, Color fg, Phase? phase, bool paused) {
     return Scaffold(
       backgroundColor: bg,
       body: GlassBackdrop.phase(
@@ -86,6 +99,10 @@ class RunningScreen extends StatelessWidget {
       ),
     );
   }
+
+  /// 밝은 배경(준비 옐로)이면 같은 색상의 진한 톤 유리, 아니면 흰 유리
+  static Color? _deep(Color bg) =>
+      GlassTokens.needsDarkGlass(bg) ? GlassTokens.deepOf(bg) : null;
 
   // ------------------------------------------------- 링 + 남은 시간
 
@@ -134,22 +151,20 @@ class RunningScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: fg,
-              fontSize: compact ? 22 : 26,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.2,
-              // 소프트 옐로 배경 위 흰 글자가 살짝 떠 보이지 않도록
-              // 얇은 그림자로 경계를 잡아 준다 (장식 아님, 가독성 목적).
-              shadows: const [
-                Shadow(
-                  color: Color(0x2E000000),
-                  blurRadius: 6,
-                  offset: Offset(0, 1),
-                ),
-              ],
+          AnimatedSwitcher(
+            duration: GlassTokens.phase,
+            child: Text(
+              label,
+              key: ValueKey(label),
+              style: TextStyle(
+                color: fg,
+                fontSize: compact ? 20 : 22,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
+                // 소프트 옐로 배경 위 흰 글자가 살짝 떠 보이지 않도록
+                // 얇은 그림자로 경계를 잡아 준다 (장식 아님, 가독성 목적).
+                shadows: AppColors.shadowOn(engine.phaseType),
+              ),
             ),
           ),
           if (paused) ...[
@@ -159,9 +174,7 @@ class RunningScreen extends StatelessWidget {
               icon: Icons.pause_rounded,
               color: fg,
               onColor: true,
-              darken: GlassTokens.needsDarkGlass(
-                AppColors.bgOf(phase?.type.name ?? 'prepare'),
-              ),
+              deep: _deep(AppColors.bgOf(phase?.type.name ?? 'prepare')),
               fontSize: 12,
               dense: true,
             ),
@@ -242,14 +255,14 @@ class RunningScreen extends StatelessWidget {
             color: fg,
             onColor: true,
             fontSize: 13.5,
-            darken: GlassTokens.needsDarkGlass(bg),
+            deep: _deep(bg),
           ),
           SizedBox(height: compact ? 8 : 12),
           // 보조 선형 진행 바 — 전체 세션 진행률
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: SizedBox(
-              height: 7,
+              height: 6,
               child: Stack(
                 children: [
                   Container(color: AppColors.trackOn(bg)),
@@ -257,12 +270,8 @@ class RunningScreen extends StatelessWidget {
                     widthFactor: progress.clamp(0.0, 1.0),
                     child: DecoratedBox(
                       decoration: BoxDecoration(
+                        color: fg,
                         borderRadius: BorderRadius.circular(4),
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [fg, fg.withValues(alpha: 0.85)],
-                        ),
                       ),
                     ),
                   ),
@@ -277,8 +286,8 @@ class RunningScreen extends StatelessWidget {
                 '전체 ${(progress * 100).round()}%',
                 style: TextStyle(
                   color: fg.withValues(alpha: 0.85),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
@@ -287,8 +296,8 @@ class RunningScreen extends StatelessWidget {
                 '남은 ${_mmss(engine.remainingTotalSeconds)}',
                 style: TextStyle(
                   color: fg.withValues(alpha: 0.85),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
@@ -317,6 +326,7 @@ class RunningScreen extends StatelessWidget {
             tooltip: '운동 종료',
             size: side,
             dark: GlassTokens.needsDarkGlass(bg),
+            bg: bg,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -327,7 +337,7 @@ class RunningScreen extends StatelessWidget {
               // 흰 버튼 위 글자는 상태색의 '진한 글자색' (옐로 위 대비 문제 해결)
               foreground: GlassTokens.textOf(engine.phaseType),
               height: h,
-              fontSize: compact ? 18 : 20,
+              fontSize: compact ? 18 : 19,
               radius: GlassTokens.rPill,
               onPressed: onPauseToggle,
             ),
@@ -340,6 +350,7 @@ class RunningScreen extends StatelessWidget {
             tooltip: '다음 구간으로',
             size: side,
             dark: GlassTokens.needsDarkGlass(bg),
+            bg: bg,
           ),
         ],
       ),
@@ -381,7 +392,7 @@ class _PhaseCard extends StatelessWidget {
     return GlassSurface(
       material: GlassMaterial.thin,
       onColor: true,
-      darken: GlassTokens.needsDarkGlass(bg),
+      deep: RunningScreen._deep(bg),
       radius: GlassTokens.rMd,
       padding: EdgeInsets.fromLTRB(16, compact ? 8 : 10, 16, compact ? 10 : 12),
       child: Column(
@@ -390,10 +401,9 @@ class _PhaseCard extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: fg.withValues(alpha: 0.75),
-              fontSize: 11.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.0,
+              color: fg.withValues(alpha: 0.8),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 1),
@@ -410,9 +420,9 @@ class _PhaseCard extends StatelessWidget {
                     maxLines: 1,
                     style: TextStyle(
                       color: fg,
-                      fontSize: compact ? 30 : 36,
+                      fontSize: compact ? 30 : 34,
                       height: 1.05,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
                       letterSpacing: -1.2,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
@@ -424,9 +434,9 @@ class _PhaseCard extends StatelessWidget {
                 maxLines: 1,
                 style: TextStyle(
                   color: fg.withValues(alpha: 0.72),
-                  fontSize: compact ? 15 : 17,
+                  fontSize: compact ? 15 : 16,
                   height: 1.05,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
@@ -447,9 +457,11 @@ class _SideButton extends StatelessWidget {
     required this.tooltip,
     this.size = 58,
     this.dark = false,
+    required this.bg,
   });
 
   final bool dark;
+  final Color bg;
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
@@ -465,7 +477,7 @@ class _SideButton extends StatelessWidget {
       size: size,
       iconColor: color,
       onColor: true,
-      darken: dark,
+      deep: dark ? GlassTokens.deepOf(bg) : null,
       material: GlassMaterial.regular,
     );
   }

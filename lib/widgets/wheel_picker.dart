@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
 import '../theme/glass/glass.dart';
 
 /// 아이폰 알람 스타일 휠 컬럼.
@@ -100,19 +99,11 @@ class _WheelColumnState extends State<WheelColumn> {
             top: (height - extent) / 2,
             height: extent,
             child: IgnorePointer(
+              // iOS 휠처럼 무채색 선택 띠 (상태색 물들임 제거)
               child: DecoratedBox(
                 decoration: ShapeDecoration(
-                  shape: GlassTokens.shape(
-                    GlassTokens.rXs,
-                    side: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      width: GlassTokens.rimWidth,
-                    ),
-                  ),
-                  color: Color.alphaBlend(
-                    widget.accent.withValues(alpha: 0.10),
-                    GlassTokens.ink.withValues(alpha: 0.05),
-                  ),
+                  shape: const GlassBorder(radius: GlassTokens.rXs),
+                  color: GlassTokens.ink.withValues(alpha: 0.06),
                 ),
               ),
             ),
@@ -155,14 +146,14 @@ class _WheelColumnState extends State<WheelColumn> {
                         style: TextStyle(
                           color: selected
                               ? (widget.enabled
-                                    ? AppColors.textPrimary
-                                    : AppColors.textTertiary)
-                              : AppColors.textSecondary,
-                          fontSize: selected ? 27 : 20,
+                                    ? GlassTokens.ink
+                                    : GlassTokens.tert)
+                              : GlassTokens.sub,
+                          fontSize: selected ? 26 : 20,
                           height: 1.0,
                           fontWeight: selected
-                              ? FontWeight.w800
-                              : FontWeight.w600,
+                              ? FontWeight.w700
+                              : FontWeight.w500,
                           letterSpacing: -0.5,
                           fontFeatures: const [FontFeature.tabularFigures()],
                         ),
@@ -219,10 +210,9 @@ class WheelDurationPicker extends StatelessWidget {
             Text(
               unitLabel,
               style: const TextStyle(
-                color: AppColors.textTertiary,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
+                color: GlassTokens.tert,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -232,9 +222,9 @@ class WheelDurationPicker extends StatelessWidget {
           child: Text(
             ':',
             style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
+              color: GlassTokens.sub,
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -252,10 +242,9 @@ class WheelDurationPicker extends StatelessWidget {
             const Text(
               '초',
               style: TextStyle(
-                color: AppColors.textTertiary,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
+                color: GlassTokens.tert,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -294,13 +283,9 @@ Future<void> showWheelSheet({
           const SizedBox(height: 16),
           GlassButton.filled(
             label: '완료',
-            color: accent,
-            height: 54,
+            color: GlassTokens.tint,
+            height: 52,
             fontSize: 16,
-            radius: GlassTokens.rMd,
-            foreground: accent == AppColors.textPrimary
-                ? Colors.white
-                : AppColors.ink,
             onPressed: () {
               onDone();
               Navigator.of(ctx).pop();

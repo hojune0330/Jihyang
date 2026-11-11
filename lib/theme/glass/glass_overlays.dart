@@ -45,7 +45,7 @@ class GlassNavBar extends StatelessWidget implements PreferredSizeWidget {
                     decoration: BoxDecoration(
                       border: Border(
                         bottom: BorderSide(
-                          color: GlassTokens.ink.withValues(alpha: 0.08),
+                          color: GlassTokens.separator,
                           width: 0.6,
                         ),
                       ),
@@ -225,7 +225,7 @@ class _GlassDialog<T> extends StatelessWidget {
                     child: Text(
                       title,
                       textAlign: TextAlign.center,
-                      style: GlassTokens.headline.copyWith(fontSize: 17),
+                      style: GlassTokens.title,
                     ),
                   ),
                   if (message != null)
@@ -235,8 +235,8 @@ class _GlassDialog<T> extends StatelessWidget {
                         message!,
                         textAlign: TextAlign.center,
                         style: GlassTokens.caption.copyWith(
-                          fontSize: 13,
-                          height: 1.4,
+                          fontSize: 13.5,
+                          height: 1.45,
                         ),
                       ),
                     ),
@@ -246,20 +246,14 @@ class _GlassDialog<T> extends StatelessWidget {
                       child: content,
                     ),
                   const SizedBox(height: 16),
-                  Container(
-                    height: 0.6,
-                    color: GlassTokens.ink.withValues(alpha: 0.12),
-                  ),
+                  Container(height: 0.6, color: GlassTokens.separator),
                   IntrinsicHeight(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         for (var i = 0; i < actions.length; i++) ...[
                           if (i > 0)
-                            Container(
-                              width: 0.6,
-                              color: GlassTokens.ink.withValues(alpha: 0.12),
-                            ),
+                            Container(width: 0.6, color: GlassTokens.separator),
                           Expanded(child: _actionButton(context, actions[i])),
                         ],
                       ],
@@ -285,8 +279,8 @@ class _GlassDialog<T> extends StatelessWidget {
             a.label,
             style: TextStyle(
               color: a.destructive ? GlassTokens.workText : GlassTokens.ink,
-              fontSize: 15.5,
-              fontWeight: a.primary ? FontWeight.w900 : FontWeight.w600,
+              fontSize: 16,
+              fontWeight: a.primary ? FontWeight.w700 : FontWeight.w500,
             ),
           ),
         ),

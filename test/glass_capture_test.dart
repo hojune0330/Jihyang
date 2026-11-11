@@ -288,6 +288,7 @@ void main() {
         onHome: () {},
       ),
     );
+    await tester.pump(const Duration(milliseconds: 1200));
     await _shot(tester, key, '5_finished');
   });
 }
