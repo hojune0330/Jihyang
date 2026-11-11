@@ -77,77 +77,7 @@ class AppColors {
   static Color trackOn(Color bg) =>
       Color.alphaBlend(Colors.black.withValues(alpha: 0.16), bg);
 
-  /// 진행 화면의 카드(라운드/세트) 배경 — 배경을 살짝 어둡게 눌러 글자 대비를 올린다.
-  static Color cardOn(Color bg) =>
-      Color.alphaBlend(Colors.black.withValues(alpha: 0.14), bg);
-
-  /// 다크 화면에서 상태색을 은은하게 깔아 쓰는 카드 배경
-  static Color tinted(Color accent) =>
-      Color.alphaBlend(accent.withValues(alpha: 0.14), surface);
-
-  /// 입체 카드 데코레이션.
-  ///
-  /// - 위에서 아래로 살짝 어두워지는 그라데이션 (표면이 빛을 받는 느낌)
-  /// - 위쪽 가장자리의 얇은 하이라이트 테두리
-  /// - 아래로 떨어지는 부드러운 그림자 (띄워진 느낌)
-  /// accent 가 있으면 테두리를 상태색으로 은은하게 물들인다.
-  static BoxDecoration raised({
-    required Color base,
-    double radius = 18,
-    Color? accent,
-    bool muted = false,
-  }) {
-    // 반투명 유리 면: 배경색이 비치도록 알파를 낮추고, 위쪽에만 빛이 살짝 모인다.
-    final glass = base.withValues(alpha: muted ? 0.55 : 0.42);
-    final sheen = Colors.white.withValues(alpha: 0.10);
-    final border = (accent != null && !muted)
-        ? accent.withValues(alpha: 0.42)
-        : Colors.white.withValues(alpha: 0.12);
-    return BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [Color.alphaBlend(sheen, glass), glass],
-        stops: const [0.0, 0.6],
-      ),
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(color: border, width: 1.0),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.30),
-          blurRadius: 20,
-          spreadRadius: -6,
-          offset: const Offset(0, 10),
-        ),
-      ],
-    );
-  }
-
-  /// 시작 버튼 — 상태색 위에 위에서 아래로 빛이 떨어지는 그라데이션과 같은 색 계열 그림자.
-  static BoxDecoration glossyButton(Color color, {double radius = 17}) {
-    return BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          Color.alphaBlend(
-            Colors.white.withValues(alpha: 0.22),
-            color.withValues(alpha: 0.88),
-          ),
-          color.withValues(alpha: 0.88),
-        ],
-      ),
-      borderRadius: BorderRadius.circular(radius),
-      boxShadow: [
-        BoxShadow(
-          color: color.withValues(alpha: 0.35),
-          blurRadius: 16,
-          spreadRadius: -2,
-          offset: const Offset(0, 7),
-        ),
-      ],
-    );
-  }
+  // 카드/버튼 재질은 글래스 시스템(lib/theme/glass/)이 담당한다.
 
   /// 옅은 배경(준비 옐로 등) 위 흰 글자가 떠 보이지 않도록 주는 최소한의 그림자.
   ///
