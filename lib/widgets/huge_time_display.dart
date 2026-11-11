@@ -54,8 +54,12 @@ class HugeTimeDisplay extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxW = constraints.maxWidth.isFinite ? constraints.maxWidth : 400.0;
-        final maxH = constraints.maxHeight.isFinite ? constraints.maxHeight : 400.0;
+        final maxW = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 400.0;
+        final maxH = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : 400.0;
 
         var availableW = maxW - horizontalPadding * 2;
         var availableH = maxH;
@@ -73,7 +77,11 @@ class HugeTimeDisplay extends StatelessWidget {
         final wRatio = availableW / tp.width;
         final hRatio = availableH / tp.height;
         final capRatio = fontSize / _probe;
-        final scale = [wRatio, hRatio, capRatio].reduce((a, b) => a < b ? a : b);
+        final scale = [
+          wRatio,
+          hRatio,
+          capRatio,
+        ].reduce((a, b) => a < b ? a : b);
         tp.dispose();
 
         // 가독성 하한(0.5배)을 적용하되, 공간을 넘지 않도록 다시 clamp.

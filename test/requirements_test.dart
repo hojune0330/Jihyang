@@ -82,54 +82,77 @@ void main() {
   });
 
   group('3) 구간별 안내(효과음 + 음성) 매핑', () {
-    Phase ph(PhaseType t, int dur, int set, int round,
-            {int ts = 2, int tr = 3}) =>
-        Phase(
-          type: t,
-          duration: dur,
-          setIndex: set,
-          roundIndex: round,
-          totalSets: ts,
-          totalRounds: tr,
-        );
+    Phase ph(
+      PhaseType t,
+      int dur,
+      int set,
+      int round, {
+      int ts = 2,
+      int tr = 3,
+    }) => Phase(
+      type: t,
+      duration: dur,
+      setIndex: set,
+      roundIndex: round,
+      totalSets: ts,
+      totalRounds: tr,
+    );
 
     test('준비 구간은 [준비하세요] 음성만 있고 효과음은 없다', () {
-      final p = planForPhase(ph(PhaseType.prepare, 10, 1, 0),
-          totalSets: 2, totalRounds: 3);
+      final p = planForPhase(
+        ph(PhaseType.prepare, 10, 1, 0),
+        totalSets: 2,
+        totalRounds: 3,
+      );
       expect(p.sfx, isNull);
       expect(p.voices, [StateVoice.prepare]);
     });
 
     test('운동 구간은 운동 효과음 + [운동 시작]', () {
-      final p = planForPhase(ph(PhaseType.work, 30, 1, 1),
-          totalSets: 2, totalRounds: 3);
+      final p = planForPhase(
+        ph(PhaseType.work, 30, 1, 1),
+        totalSets: 2,
+        totalRounds: 3,
+      );
       expect(p.sfx, Sfx.work);
       expect(p.voices, [StateVoice.startWork]);
     });
 
     test('세션 마지막 라운드는 [운동 시작] + [마지막 라운드] 순서로 안내한다', () {
-      final p = planForPhase(ph(PhaseType.work, 30, 2, 3),
-          totalSets: 2, totalRounds: 3);
+      final p = planForPhase(
+        ph(PhaseType.work, 30, 2, 3),
+        totalSets: 2,
+        totalRounds: 3,
+      );
       expect(p.sfx, Sfx.work);
       expect(p.voices, [StateVoice.startWork, StateVoice.lastRound]);
     });
 
     test('마지막 세트라도 마지막 라운드가 아니면 lastRound 안내가 없다', () {
-      final p = planForPhase(ph(PhaseType.work, 30, 2, 2),
-          totalSets: 2, totalRounds: 3);
+      final p = planForPhase(
+        ph(PhaseType.work, 30, 2, 2),
+        totalSets: 2,
+        totalRounds: 3,
+      );
       expect(p.voices, [StateVoice.startWork]);
     });
 
     test('휴식은 낮은 효과음 + [휴식 시작]', () {
-      final p = planForPhase(ph(PhaseType.rest, 10, 1, 1),
-          totalSets: 2, totalRounds: 3);
+      final p = planForPhase(
+        ph(PhaseType.rest, 10, 1, 1),
+        totalSets: 2,
+        totalRounds: 3,
+      );
       expect(p.sfx, Sfx.rest);
       expect(p.voices, [StateVoice.startRest]);
     });
 
     test('세트 간 휴식은 [세트 간 휴식입니다]', () {
-      final p = planForPhase(ph(PhaseType.setRest, 60, 1, 3),
-          totalSets: 2, totalRounds: 3);
+      final p = planForPhase(
+        ph(PhaseType.setRest, 60, 1, 3),
+        totalSets: 2,
+        totalRounds: 3,
+      );
       expect(p.sfx, Sfx.rest);
       expect(p.voices, [StateVoice.setRest]);
     });
@@ -184,19 +207,17 @@ void main() {
     });
 
     test('목소리 이름과 설명이 요구사항대로다', () {
-      expect(VoiceStyle.male.label, '남성');
-      expect(VoiceStyle.female.label, '여성');
-      expect(VoiceStyle.baby.label, '아기');
+      expect(VoiceStyle.male.label, '스포츠 MC');
+      expect(VoiceStyle.female.label, '화난 코치');
+      expect(VoiceStyle.baby.label, '어린 캐릭터');
 
       final f = VoiceStyle.female.description;
-      expect(f.contains('차분'), true, reason: f);
-      expect(f.contains('낮은 톤'), true, reason: f);
-      expect(f.contains('밝'), false, reason: f);
-      expect(f.contains('경쾌'), false, reason: f);
+      expect(f.contains('단호'), true, reason: f);
+      expect(f.contains('중년'), true, reason: f);
+      expect(f.contains('차분'), false, reason: f);
 
       final b = VoiceStyle.baby.description;
-      expect(b.contains('귀엽'), true, reason: b);
-      expect(b.contains('잔망'), true, reason: b);
+      expect(b.contains('어린'), true, reason: b);
     });
 
     test('이전 버전의 cute 설정은 아기 목소리로 이어진다', () {
@@ -229,7 +250,11 @@ void main() {
         expect((gap - 1000).abs(), lessThanOrEqualTo(70), reason: '간격 $gap');
       }
       for (final c in workCounts) {
-        expect(c.errorMs.abs(), lessThanOrEqualTo(60), reason: '오차 ${c.errorMs}');
+        expect(
+          c.errorMs.abs(),
+          lessThanOrEqualTo(60),
+          reason: '오차 ${c.errorMs}',
+        );
       }
       e.dispose();
     });
@@ -298,10 +323,17 @@ void main() {
           );
           final plan = planForPhase(p, totalSets: 2, totalRounds: 3);
           final guard = announceGuardMs(plan, style);
-          final timing = announceTiming(plan, style,
-              sfxEnabled: true, voiceEnabled: true);
-          expect(guard, greaterThan(timing.totalMs),
-              reason: '$style $type guard=$guard total=${timing.totalMs}');
+          final timing = announceTiming(
+            plan,
+            style,
+            sfxEnabled: true,
+            voiceEnabled: true,
+          );
+          expect(
+            guard,
+            greaterThan(timing.totalMs),
+            reason: '$style $type guard=$guard total=${timing.totalMs}',
+          );
           expect(timing.hasVoice, true);
         }
       }
@@ -340,8 +372,10 @@ void main() {
 
     test('효과음/음성 자산이 서로 다르다 → 플레이어도 분리된다', () {
       for (final s in Sfx.values) {
-        expect(s.asset.startsWith('audio/sfx_') || s.asset == 'audio/beep.wav',
-            true);
+        expect(
+          s.asset.startsWith('audio/sfx_') || s.asset == 'audio/beep.wav',
+          true,
+        );
       }
       final voice = StateVoice.startWork.assetFor(VoiceStyle.male);
       expect(voice, 'audio/st_male_startWork.wav');
@@ -391,7 +425,9 @@ void main() {
     test('세트 간 휴식은 세트 경계에만, 마지막 세트 뒤에는 없다', () {
       final c = cfg(rounds: 3, sets: 3, rest: 5, setRest: 30);
       final phases = c.buildPhases();
-      final setRests = phases.where((p) => p.type == PhaseType.setRest).toList();
+      final setRests = phases
+          .where((p) => p.type == PhaseType.setRest)
+          .toList();
       // 3세트 → 세트 간 휴식 2회
       expect(setRests.length, 2);
       for (final sr in setRests) {
@@ -469,8 +505,11 @@ void main() {
           .where((c) => c.label.startsWith('count'))
           .length;
       await Future<void>.delayed(const Duration(milliseconds: 2000));
-      expect(e.cueLog.where((c) => c.label.startsWith('count')).length,
-          countAtPause, reason: '일시정지 중 카운트다운 발생');
+      expect(
+        e.cueLog.where((c) => c.label.startsWith('count')).length,
+        countAtPause,
+        reason: '일시정지 중 카운트다운 발생',
+      );
       expect(e.remainingSeconds, remainAtPause);
       e.resume();
       await Future<void>.delayed(const Duration(milliseconds: 1100));

@@ -31,12 +31,13 @@ void main() {
 
   Directory audioDir() => Directory('assets/audio');
 
-  List<File> allWav() => audioDir()
-      .listSync()
-      .whereType<File>()
-      .where((f) => f.path.endsWith('.wav'))
-      .toList()
-    ..sort((a, b) => a.path.compareTo(b.path));
+  List<File> allWav() =>
+      audioDir()
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.wav'))
+          .toList()
+        ..sort((a, b) => a.path.compareTo(b.path));
 
   /// WAV 헤더에서 (샘플레이트, 채널수, data 길이) 를 읽는다.
   ({int sampleRate, int channels, int bits, int dataBytes}) readWav(File f) {
@@ -68,16 +69,18 @@ void main() {
   }
 
   group('A. 샘플레이트 통일 — 이어짐의 전제', () {
-    test('62개 자산 전부 44100Hz / 모노 / 16bit 다', () {
+    test('65개 자산 전부 44100Hz / 모노 / 16bit 다', () {
       final files = allWav();
-      expect(files.length, 62, reason: '자산 개수가 바뀌었다');
+      expect(files.length, 65, reason: '자산 개수가 바뀌었다');
 
       final wrong = <String>[];
       for (final f in files) {
         final w = readWav(f);
         if (w.sampleRate != 44100 || w.channels != 1 || w.bits != 16) {
-          wrong.add('${f.path.split('/').last} '
-              '(${w.sampleRate}Hz/${w.channels}ch/${w.bits}bit)');
+          wrong.add(
+            '${f.path.split('/').last} '
+            '(${w.sampleRate}Hz/${w.channels}ch/${w.bits}bit)',
+          );
         }
       }
       expect(wrong, isEmpty, reason: '샘플레이트 불일치: ${wrong.join(', ')}');
@@ -115,8 +118,9 @@ void main() {
 
         final bd2 = ByteData.sublistView(bytes);
         final first = bd2.getInt16(dataStart, Endian.little).abs();
-        final last =
-            bd2.getInt16(dataStart + w.dataBytes - 2, Endian.little).abs();
+        final last = bd2
+            .getInt16(dataStart + w.dataBytes - 2, Endian.little)
+            .abs();
         // 32768 기준 2% = 655
         if (first > 655 || last > 655) {
           bad.add('${f.path.split('/').last} (first=$first last=$last)');
@@ -165,7 +169,9 @@ void main() {
             final a = bd2.getInt16(dataStart + k * 2, Endian.little).abs();
             if (a > maxAmp) maxAmp = a;
           }
-          final thr = (maxAmp * 0.05).round();
+          // 피크 5% 절대 기준은 조용한 ㅅ/ㅊ 마찰음을 늦게 잡는다 (오탐).
+          // voice_pipeline_v4_test 의 하한(피크 1.2%)과 같은 기준을 쓴다.
+          final thr = (maxAmp * 0.012).round();
           var onsetWin = -1;
           for (var f2 = 0; f2 * win + win <= n; f2++) {
             var peak = 0;
@@ -181,9 +187,13 @@ void main() {
             }
           }
           expect(onsetWin, greaterThanOrEqualTo(0), reason: f.path);
-          expect(onsetWin * 5, lessThanOrEqualTo(12),
-              reason: '${f.path} 발성 시작이 ${onsetWin * 5}ms 나 된다 '
-                  '(12ms 이내여야 한다)');
+          expect(
+            onsetWin * 5,
+            lessThanOrEqualTo(12),
+            reason:
+                '${f.path} 발성 시작이 ${onsetWin * 5}ms 나 된다 '
+                '(12ms 이내여야 한다)',
+          );
 
           // (2) 끝 20ms 는 조용하다 (잘림/클릭 없음)
           final tailStart = n - 221 * 4;
@@ -192,8 +202,11 @@ void main() {
             final a = bd2.getInt16(dataStart + k * 2, Endian.little).abs();
             if (a > tailPeak) tailPeak = a;
           }
-          expect(tailPeak, lessThan(655),
-              reason: '${f.path} 끝이 조용하지 않다 ($tailPeak)');
+          expect(
+            tailPeak,
+            lessThan(655),
+            reason: '${f.path} 끝이 조용하지 않다 ($tailPeak)',
+          );
         }
       }
     });
@@ -260,7 +273,7 @@ void main() {
 
     test('카운트다운 묶음 3개가 4.3초 이상이다', () {
       for (final style in ['male', 'female', 'baby']) {
-        final f = File('assets/audio/cnt_$style.wav');
+        final f = File('assets/audio/cnt_v7_$style.wav');
         expect(f.existsSync(), true, reason: f.path);
         final w = readWav(f);
         final ms = w.dataBytes / 2 / 44100 * 1000;

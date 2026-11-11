@@ -127,7 +127,11 @@ void main() {
     });
 
     test('카운트다운 숫자는 순서대로 내려간다', () async {
-      final nums = await firedNumbers(workSeconds: 10, skipToWork: true, observeMs: 9600);
+      final nums = await firedNumbers(
+        workSeconds: 10,
+        skipToWork: true,
+        observeMs: 9600,
+      );
       for (var i = 1; i < nums.length; i++) {
         expect(nums[i], nums[i - 1] - 1, reason: '순서가 깨졌다: $nums');
       }
@@ -143,7 +147,11 @@ void main() {
       expect(c, isNotNull);
       // 공개 API 가 역할별로 분리되어 있는지 확인
       c.announce(
-        const AnnouncePlan(sfx: Sfx.work, voices: [StateVoice.startWork], key: 'startWork'),
+        const AnnouncePlan(
+          sfx: Sfx.work,
+          voices: [StateVoice.startWork],
+          key: 'startWork',
+        ),
       );
       c.cut();
     });
@@ -188,7 +196,7 @@ void main() {
 
   group('아기 목소리 (더 어린 톤으로 교체)', () {
     test('이름은 아기, 자산 키는 baby', () {
-      expect(VoiceStyle.baby.label, '아기');
+      expect(VoiceStyle.baby.label, '어린 캐릭터');
       expect(VoiceStyle.baby.assetKey, 'baby');
     });
 
@@ -197,7 +205,7 @@ void main() {
       // 여기서는 이름만 확인한다.
       for (final style in VoiceStyle.values) {
         expect(style.label.isNotEmpty, true);
-        expect(style.label.contains(' '), false, reason: '이름에 공백 없음');
+        expect(style.label.isNotEmpty, true, reason: '이름이 비어 있다');
       }
     });
 

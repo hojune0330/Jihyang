@@ -545,10 +545,15 @@ class TabataEngine extends ChangeNotifier {
             // 숫자를 건너뛴 경우(0ms 로 즉시 시작) 위치가 어긋났다.
             // 이제는 지금 울려야 할 숫자의 타임라인 위치로 이동해 시작한다.
             if (!_countStarted) {
-              _countStarted = true;
-              _countStartedWall = now;
-              _countStartPosMs = targetPos;
-              AudioCoach.instance.playCountBundleAt(targetPos);
+              // 재생이 실제로 시작된 경우에만 '재생 중' 으로 표시한다.
+              // 실패(웹 디코딩 전·오디오 잠금)했는데 표시하면 다음 숫자에서도
+              // 재시도하지 않아 묶음 전체가 무음이 된다.
+              final started = AudioCoach.instance.playCountBundleAt(targetPos);
+              if (started) {
+                _countStarted = true;
+                _countStartedWall = now;
+                _countStartPosMs = targetPos;
+              }
               return;
             }
 
@@ -571,9 +576,13 @@ class TabataEngine extends ChangeNotifier {
             final expectedPos = _countStartPosMs + played;
             final drift = (expectedPos - targetPos).abs();
             if (drift > countStepMs) {
-              _countStartedWall = now;
-              _countStartPosMs = targetPos;
-              AudioCoach.instance.playCountBundleAt(targetPos);
+              final restarted = AudioCoach.instance.playCountBundleAt(
+                targetPos,
+              );
+              if (restarted) {
+                _countStartedWall = now;
+                _countStartPosMs = targetPos;
+              }
             }
             // 그 외에는 아무것도 하지 않는다 (재생 중인 묶음이 계속 이어진다)
           },
@@ -616,12 +625,7 @@ class TabataEngine extends ChangeNotifier {
       // 너무 일찍 깨어났으면 남은 시간만큼 다시 예약 (드리프트 보정)
       final delta = target.difference(now).inMilliseconds;
       if (delta > 12) {
-        _scheduleAt(
-          target,
-          delta - 4,
-          label: label,
-          onFire: onFire,
-        );
+        _scheduleAt(target, delta - 4, label: label, onFire: onFire);
         return;
       }
       _record(label, target);
@@ -648,8 +652,7 @@ class TabataEngine extends ChangeNotifier {
       final carry = elapsed - durationMs;
       final nextIdx = _index + 1;
       final isLastAdvance =
-          nextIdx >= _phases.length ||
-          carry < _phases[nextIdx].duration * 1000;
+          nextIdx >= _phases.length || carry < _phases[nextIdx].duration * 1000;
       _advanceFrom(elapsedMs: elapsed, announce: isLastAdvance);
       if (_status != EngineStatus.running) return;
     }
@@ -660,10 +663,7 @@ class TabataEngine extends ChangeNotifier {
   /// [announce] 는 기본적으로 '실제 시간이 흘러' 넘어갈 때만 true 다.
   /// 백그라운드에서 여러 구간을 한꺼번에 따라잡을 때는 마지막 구간만 안내해
   /// 음성이 몰아서 재생되는 일을 막는다.
-  void _advanceFrom({
-    required int elapsedMs,
-    bool announce = true,
-  }) {
+  void _advanceFrom({required int elapsedMs, bool announce = true}) {
     final prev = currentPhase;
     if (prev == null) return;
 

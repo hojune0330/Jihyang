@@ -179,11 +179,14 @@ void main() {
   group('B. 카운트다운도 파일 하나', () {
     test('목소리별 카운트다운 묶음 파일이 존재하고 4초 이상이다', () {
       for (final style in VoiceStyle.values) {
-        final f = File('assets/audio/cnt_${style.assetKey}.wav');
+        final f = File('assets/audio/cnt_v7_${style.assetKey}.wav');
         expect(f.existsSync(), true, reason: f.path);
         // 5·4·3·2·1 → 최소 4초
-        expect(f.lengthSync(), greaterThan(44100 * 4 * 2 * 0.8),
-            reason: '${f.path} 가 너무 짧다');
+        expect(
+          f.lengthSync(),
+          greaterThan(44100 * 4 * 2 * 0.8),
+          reason: '${f.path} 가 너무 짧다',
+        );
       }
     });
 
@@ -247,9 +250,12 @@ void main() {
           r.closeSync();
           var dataLen = hdr.length;
           for (var i = 0; i + 8 <= hdr.length - 4; i++) {
-            if (hdr[i] == 0x64 && hdr[i + 1] == 0x61 && hdr[i + 2] == 0x74 &&
+            if (hdr[i] == 0x64 &&
+                hdr[i + 1] == 0x61 &&
+                hdr[i + 2] == 0x74 &&
                 hdr[i + 3] == 0x61) {
-              dataLen = hdr[i + 4] |
+              dataLen =
+                  hdr[i + 4] |
                   (hdr[i + 5] << 8) |
                   (hdr[i + 6] << 16) |
                   (hdr[i + 7] << 24);
@@ -258,9 +264,10 @@ void main() {
           }
           final actualMs = (dataLen / 2 / 44100 * 1000).round();
 
-          final plan = AnnouncePlan(key: key, voices: const [
-            StateVoice.startWork,
-          ]);
+          final plan = AnnouncePlan(
+            key: key,
+            voices: const [StateVoice.startWork],
+          );
           final t = announceTiming(
             plan,
             style,

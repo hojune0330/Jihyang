@@ -25,8 +25,7 @@ void main() {
       // 단위 테스트는 VM 에서 돌기 때문에 WebAudio 는 스텁이다.
       // 스텁이 "지원 안 함" 을 정확히 알려야 audioplayers 경로로 간다.
       final coach = AudioCoach.instance;
-      expect(coach.isWebBridge, false,
-          reason: 'VM 테스트에서는 웹 브리지가 없어야 한다');
+      expect(coach.isWebBridge, false, reason: 'VM 테스트에서는 웹 브리지가 없어야 한다');
       // 잠금 개념이 없으므로 항상 재생 가능 상태
       expect(coach.isUnlocked, true);
     });
@@ -51,8 +50,7 @@ void main() {
           'finish',
           'workLast',
         ]) {
-          expect(map![key], isNotNull,
-              reason: '${style.assetKey}.$key 길이가 없다');
+          expect(map![key], isNotNull, reason: '${style.assetKey}.$key 길이가 없다');
           expect(map[key]!, greaterThan(0));
         }
         expect(cntDurMs[style.assetKey], isNotNull);
@@ -70,10 +68,14 @@ void main() {
           if (!seq.containsKey(key)) continue;
           final expected = stateVoiceDurationMs(style, voice) + overhead;
           final actual = seq[key]!;
-          expect((actual - expected).abs(), lessThan(60),
-              reason: '${style.assetKey}.$key: '
-                  '상태 ${stateVoiceDurationMs(style, voice)}ms 인데 '
-                  '시퀀스가 ${actual}ms (기대 ${expected}ms)');
+          expect(
+            (actual - expected).abs(),
+            lessThan(60),
+            reason:
+                '${style.assetKey}.$key: '
+                '상태 ${stateVoiceDurationMs(style, voice)}ms 인데 '
+                '시퀀스가 ${actual}ms (기대 ${expected}ms)',
+          );
         }
       }
     });
@@ -81,8 +83,11 @@ void main() {
     test('목소리 3종 모두 카운트다운 묶음이 5개 숫자를 담을 만큼 길다', () {
       // 마지막 숫자 '1' 이 4000ms 에서 시작하고 그 길이만큼 더 필요하다.
       for (final style in VoiceStyle.values) {
-        expect(cntDurMs[style.assetKey]!, greaterThan(4300),
-            reason: '${style.assetKey} 묶음이 너무 짧다');
+        expect(
+          cntDurMs[style.assetKey]!,
+          greaterThan(4300),
+          reason: '${style.assetKey} 묶음이 너무 짧다',
+        );
       }
       expect(countBundleLastMs, 4000);
       expect(countStepMs, 1000);
@@ -95,7 +100,9 @@ void main() {
       // role 이 하나뿐이면 안내와 카운트다운이 서로를 끊는다.
       final c = AudioCoach.instance;
       // 공개 API 로 역할 분리를 확인한다
-      c.announce(const AnnouncePlan(sfx: Sfx.work, voices: [StateVoice.startWork]));
+      c.announce(
+        const AnnouncePlan(sfx: Sfx.work, voices: [StateVoice.startWork]),
+      );
       c.playCountBundleAt(0);
       c.playSfx(Sfx.count);
       c.cut();

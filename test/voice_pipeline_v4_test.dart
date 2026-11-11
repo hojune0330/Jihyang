@@ -51,8 +51,13 @@ void main() {
   /// 실제로 여성 '삼' 이 18ms 로 잡혀 오탐이 났다 (실제로는 8ms).
   /// tool/countdown_pipeline.py 의 onset_floor_ms 와 같은 식으로 바꾼다.
   /// 파일의 [startMs, startMs+lenMs) 구간만 떼어 발성 시작을 잰다.
-  double onsetMsOfWindow(File f, double startMs, double lenMs,
-      {double frameMs = 1.0, double sustainMs = 8.0}) {
+  double onsetMsOfWindow(
+    File f,
+    double startMs,
+    double lenMs, {
+    double frameMs = 1.0,
+    double sustainMs = 8.0,
+  }) {
     final bytes = f.readAsBytesSync();
     final w = readWav(f);
     final bd = ByteData.sublistView(bytes);
@@ -101,11 +106,14 @@ void main() {
   double onsetMs(File f, {double frameMs = 1.0, double sustainMs = 8.0}) {
     final w0 = readWav(f);
     final totalMs = (w0.dataBytes ~/ 2) / w0.sampleRate * 1000;
-    return onsetMsOfWindow(f, 0, totalMs, frameMs: frameMs,
-        sustainMs: sustainMs);
+    return onsetMsOfWindow(
+      f,
+      0,
+      totalMs,
+      frameMs: frameMs,
+      sustainMs: sustainMs,
+    );
   }
-
-
 
   /// 클립 끝에서부터 세어 처음 발성이 나오는 위치 (끝에서 몇 ms)
   double tailVoiceMs(File f) {
@@ -155,7 +163,9 @@ void main() {
           expect(f.existsSync(), true, reason: f.path);
           final tv = tailVoiceMs(f);
           if (tv < 20) {
-            bad.add('${f.path.split('/').last}: 끝 여운 ${tv.toStringAsFixed(0)}ms');
+            bad.add(
+              '${f.path.split('/').last}: 끝 여운 ${tv.toStringAsFixed(0)}ms',
+            );
           }
         }
       }
@@ -185,8 +195,14 @@ void main() {
     test('모든 음성 클립이 12ms 안에 발성된다', () {
       final bad = <String>[];
       for (final style in ['male', 'female', 'baby']) {
-        for (final key in ['prepare', 'startWork', 'startRest', 'setRest',
-          'lastRound', 'finish']) {
+        for (final key in [
+          'prepare',
+          'startWork',
+          'startRest',
+          'setRest',
+          'lastRound',
+          'finish',
+        ]) {
           final f = File('assets/audio/st_${style}_$key.wav');
           final on = onsetMs(f);
           if (on < 0 || on > 12) {
@@ -204,13 +220,17 @@ void main() {
       // 1초 칸마다 따로 재야 한다 — 이웃 숫자의 여운이 섞이면
       // 노이즈 플로어가 올라가 온셋이 밀리기 때문이다.
       for (final style in ['male', 'female', 'baby']) {
-        final f = File('assets/audio/cnt_$style.wav');
+        final f = File('assets/audio/cnt_v7_$style.wav');
         expect(f.existsSync(), true, reason: f.path);
         for (var i = 0; i < 5; i++) {
           final on = onsetMsOfWindow(f, i * 1000, 1000);
-          expect(on, inInclusiveRange(0, 12),
-              reason: '$style 숫자 ${5 - i}: 칸 안 온셋 '
-                  '${on.toStringAsFixed(0)}ms (12ms 이내여야 한다)');
+          expect(
+            on,
+            inInclusiveRange(0, 12),
+            reason:
+                '$style 숫자 ${5 - i}: 칸 안 온셋 '
+                '${on.toStringAsFixed(0)}ms (12ms 이내여야 한다)',
+          );
         }
       }
     });
@@ -221,8 +241,14 @@ void main() {
       // 파일을 실제로 읽어 계산한 값과 표가 어긋나면
       // 보호구간 계산이 틀어져 카운트다운이 안내를 덮는다.
       for (final style in ['male', 'female', 'baby']) {
-        for (final key in ['prepare', 'startWork', 'startRest', 'setRest',
-          'lastRound', 'finish']) {
+        for (final key in [
+          'prepare',
+          'startWork',
+          'startRest',
+          'setRest',
+          'lastRound',
+          'finish',
+        ]) {
           final seq = File('assets/audio/seq_${style}_$key.wav');
           final st = File('assets/audio/st_${style}_$key.wav');
           expect(seq.existsSync(), true, reason: seq.path);
@@ -232,9 +258,13 @@ void main() {
           final stMs = readWav(st).dataBytes / 2 / 44100 * 1000;
           // 삑(130ms) + 간격(180ms) + 음성
           final expected = 130 + 180 + stMs;
-          expect((seqMs - expected).abs(), lessThan(120),
-              reason: '$style/$key: 시퀀스 ${seqMs.toStringAsFixed(0)}ms, '
-                  '기대 ${expected.toStringAsFixed(0)}ms');
+          expect(
+            (seqMs - expected).abs(),
+            lessThan(120),
+            reason:
+                '$style/$key: 시퀀스 ${seqMs.toStringAsFixed(0)}ms, '
+                '기대 ${expected.toStringAsFixed(0)}ms',
+          );
         }
       }
     });

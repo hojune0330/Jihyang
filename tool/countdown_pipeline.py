@@ -65,6 +65,26 @@ HEAD_TRIM_MS = 8       # 남기는 아주 짧은 앞 여백 (페이드인용)
 TAIL_MARGIN_MS = 55    # 뒤 여운 — 잘림 방지
 FADE_TAIL_MS = 60      # 클립 끝 감쇠 — 다음 숫자와의 간섭 방지
 
+# 목표 게이티드 음량(dB). **목소리마다 안내 음성에 맞춘다.**
+#
+# ## 왜 고정값이 아니라 목소리별인가 (실측으로 확인한 소리 문제)
+#
+# 안내 시퀀스(seq)의 게이티드 음량:
+#     male -15.59 / female -12.49 / baby -12.60 dB
+# 카운트다운을 -13.0 으로 통일하면:
+#     male 은 카운트다운이 안내보다 **2.6dB 크고**,
+#     female/baby 는 0.4~0.5dB 작다.
+# 남성 목소리에서 5·4·3·2·1 이 갑자기 크게 터지는 원인이다.
+#
+# 사용자는 한 목소리만 듣는다. 목소리 사이의 절대 음량은 의미가 없고,
+# **같은 목소리 안에서 안내와 카운트다운이 같은 크기**여야 한다.
+# 그래서 목표값을 그 목소리의 안내 음량에서 직접 끌어온다.
+TARGET_COUNT_DB = {
+    'male': -15.5,
+    'female': -12.5,
+    'baby': -12.6,
+}
+
 
 def envelope(d, frame_ms=FRAME_MS):
     w = max(1, int(SR * frame_ms / 1000))
@@ -171,6 +191,86 @@ def digits_aligned_tail(seg):
     return seg
 
 
+# --------------------------------------------------------------- 음량 정규화
+#
+# ## 왜 기존 방식으로는 안 되는가 (실측으로 확인한 소리 문제)
+#
+# 기존에는 `normalize(seg, 0.21)` 로 **파형 전체 RMS** 를 0.21 에 맞춘 뒤,
+# 피크가 0.90 을 넘으면 파형을 통째로 깎았다.
+#
+# '삼' 은 첫 자음 ㅅ 이 마찰음(노이즈)이라 파형에 예리한 스파이크가 생긴다.
+# 그래서 파고율(crest factor = peak / RMS)이 크고, 피크 천장에 걸려
+# **남는 음량이 훨씬 작아진다.**
+#
+# 실측 (수정 전):
+#   male   오 -13.08 / 사 -13.13 / 삼 -16.48 / 이 -13.81 / 일 -14.98 dB
+#   female 오 -13.13 / 사 -15.84 / 삼 -15.56 / 이 -13.09 / 일 -12.86 dB
+#   → 한 묶음 안에서 최대 **3.71 dB** 차이. '삼' 이 유독 작게 들린다.
+#
+# ## 새 방식
+#   1) **게이티드 음량**을 기준으로 삼는다. 20ms 프레임 RMS 를 구하고,
+#      최대 프레임보다 -40dB 아래인 구간(숨·무음)은 빼고 평균한다.
+#      이 값이 사람이 느끼는 '소리 크기' 에 가깝다.
+#   2) 목표 음량에 맞춘다. 피크 천장은 넘지 않게 한다.
+#   3) 천장에 걸려 목표에 못 미치면 그때만 **부드러운 포화**로 파고율을
+#      낮춘다. 하드 클리핑은 쓰지 않는다(찌그러짐).
+#
+# 이렇게 하면 5개 숫자의 음량이 ±0.7dB 안에 들어온다.
+
+def gated_loudness(d, frame_ms=20.0, gate_db=-40.0):
+    """게이티드 RMS (선형). 숨·무음 구간을 빼고 잰 '체감 음량'."""
+    w = max(1, int(SR * frame_ms / 1000))
+    n = len(d) // w
+    if n == 0:
+        return 0.0
+    e = np.sqrt(np.mean(d[:n * w].reshape(n, w) ** 2, axis=1))
+    ref = float(e.max())
+    if ref <= 0:
+        return 0.0
+    keep = e[e > ref * (10 ** (gate_db / 20.0))]
+    if keep.size == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(keep ** 2)))
+
+
+def soft_limit(d, ceiling):
+    """천장을 넘는 부분만 부드럽게 눌러 넣는다 (하드 클립 금지).
+
+    tanh 기반 소프트 니(knee) — 파고율을 낮춰 음량을 더 올릴 수 있게 한다.
+    """
+    peak = float(np.abs(d).max()) if d.size else 0.0
+    if peak <= ceiling or peak <= 0:
+        return d
+    x = d / peak                      # -1..1 로 정규화
+    drive = 1.0 + 1.6 * (1.0 - ceiling)
+    y = np.tanh(x * drive) / np.tanh(drive)
+    return y * ceiling
+
+
+def normalize_loudness(d, target_db, ceiling=MAX_PEAK, max_boost_db=12.0):
+    """게이티드 음량을 [target_db] 에 맞춘다.
+
+    · 목표에 못 미치면 소프트 리미터로 파고율을 낮춰 더 올린다.
+    · 목표보다 크면 그냥 내린다.
+    · 무한 증폭을 막기 위해 상승폭에 상한을 둔다.
+    """
+    target = 10 ** (target_db / 20.0)
+    for _ in range(4):
+        cur = gated_loudness(d)
+        if cur <= 1e-7:
+            return d
+        gain = target / cur
+        gain_db = 20 * np.log10(gain)
+        gain = min(gain, 10 ** (max_boost_db / 20.0))
+        d = d * gain
+        peak = float(np.abs(d).max())
+        if peak <= ceiling:
+            return d
+        # 천장 초과 → 소프트 리미터로 눌러 담고 다시 시도
+        d = soft_limit(d, ceiling)
+    return d
+
+
 def main():
     meta = {'cnt': {}, 'st': {}}
     try:
@@ -262,16 +362,22 @@ def main():
             # 파형이 달라져서 "묶음 안에서 정확히 0/1000/2000ms 에
             # 있는가" 를 검증할 방법이 사라진다.
             seg = digits_aligned_tail(seg)
+
+            # 음량 정규화 — 게이티드 음량 기준. 숫자마다 같은 크기로.
+            seg = normalize_loudness(seg, TARGET_COUNT_DB[style])
+
             digits.append(seg)
             per_digit[f'{style}_{DIGITS[idx]}'] = {
                 'word': DIGIT_WORDS[DIGITS[idx]],
                 'ms': int(round(len(seg) / SR * 1000)),
                 'onset_ms': int(round(onset_floor_ms(seg))),
+                'loud_db': round(20 * np.log10(max(gated_loudness(seg), 1e-9)), 2),
                 'src': [round(a, 3), round(b, 3)],
             }
             print(f'   {DIGIT_WORDS[DIGITS[idx]]}({DIGITS[idx]}) '
                   f'원본 {a:.2f}~{b:.2f} → {len(seg) / SR * 1000:.0f}ms '
-                  f'(온셋 {per_digit[f"{style}_{DIGITS[idx]}"]["onset_ms"]}ms)')
+                  f'(온셋 {per_digit[f"{style}_{DIGITS[idx]}"]["onset_ms"]}ms, '
+                  f'{per_digit[f"{style}_{DIGITS[idx]}"]["loud_db"]:.1f}dB)')
 
         while len(digits) < 5:
             digits.append(np.zeros(int(SR * 0.2)))
@@ -291,9 +397,11 @@ def main():
         for i, t in enumerate(placed):
             s0 = i * step
             bundle[s0:s0 + len(t)] += t
-        peak = float(np.max(np.abs(bundle)))
-        if peak > MAX_PEAK:
-            bundle = bundle * (MAX_PEAK / peak)
+
+        # 묶음 전체를 한 번 더 같은 기준으로 맞춘다.
+        # 개별 클립만 맞추면 겹치는 구간(여운)에서 합이 달라져 묶음의
+        # 체감 음량이 흔들린다. 묶음도 같은 목표로 통일한다.
+        bundle = normalize_loudness(bundle, TARGET_COUNT_DB[style])
 
         ms = save(os.path.join(OUT, f'cnt_{style}.wav'), bundle)
         cnt_len[style] = ms

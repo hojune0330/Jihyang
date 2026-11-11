@@ -60,11 +60,16 @@ void main() {
     // ignore: avoid_print
     print('H1 → 묶음 시작 횟수=$starts, 숫자 발화=$counts');
     // ignore: avoid_print
-    print('H1 → playLog: '
-        '${AudioCoach.instance.playLog.where((e) => e.kind.startsWith('count')).map((e) => e.kind).toList()}');
+    print(
+      'H1 → playLog: '
+      '${AudioCoach.instance.playLog.where((e) => e.kind.startsWith('count')).map((e) => e.kind).toList()}',
+    );
 
-    expect(starts, lessThanOrEqualTo(1),
-        reason: '카운트다운 묶음은 구간당 1회만 시작돼야 한다 (실제 $starts회)');
+    expect(
+      starts,
+      lessThanOrEqualTo(1),
+      reason: '카운트다운 묶음은 구간당 1회만 시작돼야 한다 (실제 $starts회)',
+    );
     e.dispose();
   }, timeout: const Timeout(Duration(minutes: 2)));
 
@@ -102,10 +107,15 @@ void main() {
     // ignore: avoid_print
     print('H1b → 묶음 시작 횟수=$starts');
     // ignore: avoid_print
-    print('H1b → ${AudioCoach.instance.playLog.where((e) => e.kind.startsWith('count')).map((e) => e.kind).toList()}');
+    print(
+      'H1b → ${AudioCoach.instance.playLog.where((e) => e.kind.startsWith('count')).map((e) => e.kind).toList()}',
+    );
 
-    expect(starts, lessThanOrEqualTo(1),
-        reason: '재개를 반복해도 묶음은 1회여야 한다 (실제 $starts회)');
+    expect(
+      starts,
+      lessThanOrEqualTo(1),
+      reason: '재개를 반복해도 묶음은 1회여야 한다 (실제 $starts회)',
+    );
     e.dispose();
   }, timeout: const Timeout(Duration(minutes: 2)));
 
@@ -134,11 +144,15 @@ void main() {
       if (!c.label.startsWith('count')) continue;
       final n = int.parse(c.label.substring(5));
       final expectAt = 12000 - n * 1000; // T+7s(n=5) … T+11s(n=1)
-      final drift = (c.actualWallMs - phaseStart.millisecondsSinceEpoch) - expectAt;
+      final drift =
+          (c.actualWallMs - phaseStart.millisecondsSinceEpoch) - expectAt;
       // ignore: avoid_print
       print('H2 → ${c.label}: 기대 $expectAt ms, 실제 $drift ms 편차');
-      expect(drift.abs(), lessThan(80),
-          reason: '${c.label} 이 격자에서 ${drift}ms 밀렸다');
+      expect(
+        drift.abs(),
+        lessThan(80),
+        reason: '${c.label} 이 격자에서 ${drift}ms 밀렸다',
+      );
     }
     e.dispose();
   }, timeout: const Timeout(Duration(minutes: 2)));

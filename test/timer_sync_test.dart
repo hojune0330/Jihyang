@@ -55,8 +55,7 @@ void main() {
       );
       // 각 숫자 간 실제 간격도 1초 근처여야 한다
       for (var i = 1; i < counts.length; i++) {
-        final gapMs =
-            counts[i].actualWallMs - counts[i - 1].actualWallMs;
+        final gapMs = counts[i].actualWallMs - counts[i - 1].actualWallMs;
         expect(
           (gapMs - 1000).abs(),
           lessThanOrEqualTo(70),

@@ -30,16 +30,16 @@ void main() {
 
     // 목소리 목록까지 스크롤해서 확실히 화면 안에 올린다.
     await tester.scrollUntilVisible(
-      find.text('아기'),
+      find.text('어린 캐릭터'),
       240,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump(const Duration(milliseconds: 200));
 
     // 이름 3종이 보인다
-    expect(find.text('남성'), findsOneWidget);
-    expect(find.text('여성'), findsOneWidget);
-    expect(find.text('아기'), findsOneWidget);
+    expect(find.text('스포츠 MC'), findsOneWidget);
+    expect(find.text('화난 코치'), findsOneWidget);
+    expect(find.text('어린 캐릭터'), findsOneWidget);
 
     // 모델에 남아 있는 설명 문구는 화면에 나타나지 않아야 한다
     for (final style in VoiceStyle.values) {
@@ -55,13 +55,13 @@ void main() {
     await pumpSettings(tester);
 
     await tester.scrollUntilVisible(
-      find.text('아기'),
+      find.text('어린 캐릭터'),
       240,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pump(const Duration(milliseconds: 200));
 
-    await tester.tap(find.text('아기'));
+    await tester.tap(find.text('어린 캐릭터'));
     // 탭하면 미리 듣기가 함께 실행된다. _Channel.play 는
     // stop → setVolume → setSource → seek → resume 를 **순차로** await 하고
     // 각 단계마다 2500ms 타임아웃 타이머를 건다. 오디오 플러그인이 없는
@@ -72,6 +72,6 @@ void main() {
     }
 
     // 탭 후에도 화면이 정상 (예외 없음)
-    expect(find.text('아기'), findsOneWidget);
+    expect(find.text('어린 캐릭터'), findsOneWidget);
   });
 }

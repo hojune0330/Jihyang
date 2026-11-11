@@ -106,6 +106,12 @@ class NotificationService {
     return '$s초';
   }
 
+  /// 구간 알림 ID 순환 (1 ~ 99999)
+  int _nextPhaseId() {
+    _id = _id >= 99999 ? 1 : _id + 1;
+    return _id;
+  }
+
   Future<void> _schedule({
     required DateTime at,
     required String title,
@@ -124,7 +130,7 @@ class NotificationService {
 
     try {
       await _plugin.zonedSchedule(
-        _id++,
+        _nextPhaseId(),
         title,
         body,
         tz.TZDateTime.from(at, tz.local),
@@ -138,6 +144,20 @@ class NotificationService {
     }
   }
 
+  /// 예전 버전이 예약한 루틴 알람(ID 100000 이상)을 모두 지운다. 앱 시작 때 한 번 호출.
+  Future<void> cancelLegacyRoutineAlarms() async {
+    if (!_available) return;
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      for (final p in pending) {
+        if (p.id >= 100000) await _plugin.cancel(p.id);
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('legacy cleanup failed: $e');
+    }
+  }
+
+  /// 구간 알림 전부 취소
   Future<void> cancelAll() async {
     if (!_available) return;
     try {

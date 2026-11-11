@@ -48,25 +48,52 @@
 
   var BASE = null; // 오디오 자산 기본 경로 (Dart 가 설정)
 
+  // iOS 는 Web Audio 도 무음 스위치(벨소리 스위치)의 영향을 받는다.
+  // Safari 16.4+ 의 audioSession 을 'playback' 으로 두면 무음 스위치와
+  // 무관하게 재생된다. 지원하지 않는 브라우저에서는 아무 일도 하지 않는다.
+  function requestPlaybackSession() {
+    try {
+      if (navigator.audioSession && navigator.audioSession.type !== 'playback') {
+        navigator.audioSession.type = 'playback';
+      }
+    } catch (e) { /* 미지원 브라우저 무시 */ }
+  }
+
   function ensureContext() {
     if (ctx) return ctx;
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
+    requestPlaybackSession();
     ctx = new AC({ latencyHint: 'interactive' });
     masterGain = ctx.createGain();
     masterGain.gain.value = 1.0;
     masterGain.connect(ctx.destination);
+
+    // iOS 는 전화·화면 잠금·앱 전환 때 컨텍스트를 'interrupted' 로 바꾼다.
+    // 상태가 바뀔 때마다 기록해 두면 다음 재생 전에 정확히 판단할 수 있다.
+    ctx.onstatechange = function () {
+      unlocked = ctx.state === 'running';
+    };
+    // 화면이 다시 보일 때 잠겨 있으면 resume 을 시도한다.
+    // (제스처 밖이라 iOS 에서는 실패할 수 있으나, 실패해도 해가 없다.)
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && ctx && ctx.state !== 'running') {
+        try { ctx.resume(); } catch (e) {}
+      }
+    });
     return ctx;
   }
 
   // ---------------------------------------------------------------- 잠금 해제
-  // 첫 제스처에서 호출돼야 한다. 여러 번 호출해도 안전하다.
+  // 사용자 제스처 안에서 호출돼야 한다. 여러 번 호출해도 안전하다.
+  // **이미 풀려 있어도 매번 호출하라.** iOS 는 중단 후 제스처로만 복구된다.
   function unlock() {
     ensureContext();
     if (!ctx) return Promise.resolve(false);
+    requestPlaybackSession();
     var jobs = [];
     if (ctx.state !== 'running' && ctx.resume) {
-      jobs.push(ctx.resume());
+      jobs.push(ctx.resume().catch(function () {}));
     }
     // iOS Safari: 무음 버퍼를 한 번 재생해야 잠금이 풀리는 사례가 있다.
     try {
@@ -99,7 +126,7 @@
     ensureContext();
     if (!ctx) return Promise.resolve(false);
 
-    var p = fetch(url, { cache: 'force-cache' })
+    var p = fetch(url, { cache: 'no-cache' })
       .then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.arrayBuffer();

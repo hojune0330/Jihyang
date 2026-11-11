@@ -84,21 +84,21 @@ const int beepLeadMs = 130;
 /// 잘림 0ms, 앞 무음 제거. 발성은 클립 시작 0~10ms 안에 시작한다.
 const Map<VoiceStyle, Map<StateVoice, int>> _stDurationMs = {
   VoiceStyle.male: {
-    // v5 — 아나운서 톤으로 남성만 재생성 (tool/voice_male_anchor.py)
-    StateVoice.prepare: 471,
-    StateVoice.startWork: 793,
-    StateVoice.startRest: 759,
-    StateVoice.setRest: 1038,
-    StateVoice.lastRound: 893,
-    StateVoice.finish: 873,
+    // v18 스포츠 MC — 앞 무음 제거 실측 (tool/fix_v18_onset.py)
+    StateVoice.prepare: 464,
+    StateVoice.startWork: 974,
+    StateVoice.startRest: 905,
+    StateVoice.setRest: 961,
+    StateVoice.lastRound: 1009,
+    StateVoice.finish: 940,
   },
   VoiceStyle.female: {
-    StateVoice.prepare: 441,
-    StateVoice.startWork: 873,
-    StateVoice.startRest: 788,
-    StateVoice.setRest: 1000,
-    StateVoice.lastRound: 993,
-    StateVoice.finish: 950,
+    StateVoice.prepare: 520,
+    StateVoice.startWork: 939,
+    StateVoice.startRest: 947,
+    StateVoice.setRest: 834,
+    StateVoice.lastRound: 1012,
+    StateVoice.finish: 1006,
   },
   VoiceStyle.baby: {
     StateVoice.prepare: 456,
@@ -118,23 +118,24 @@ int stateVoiceDurationMs(VoiceStyle style, StateVoice v) =>
 /// v4: 겹침 없는 이어붙이기, 간격 180/300ms, 삑 RMS 0.24.
 const Map<String, Map<String, int>> seqDurMs = {
   'male': {
-    // v5 아나운서 톤
-    'prepare': 781,
-    'startWork': 1103,
-    'startRest': 1069,
-    'setRest': 1348,
-    'lastRound': 1203,
-    'finish': 1183,
-    'workLast': 2297,
+    // v18 스포츠 MC 픽스 (구절 단위 재생성, 음성 인식 기준 분할)
+    'prepare': 775,
+    'startWork': 1283,
+    'startRest': 1215,
+    'setRest': 1271,
+    'lastRound': 1334,
+    'finish': 1251,
+    'workLast': 2663,
   },
   'female': {
-    'prepare': 751,
-    'startWork': 1183,
-    'startRest': 1098,
-    'setRest': 1310,
-    'lastRound': 1303,
-    'finish': 1260,
-    'workLast': 2476,
+    // v18c 부드러운 30대 여성 (구절 단위 재생성, 음성 인식 기준 분할)
+    'prepare': 830,
+    'startWork': 1249,
+    'startRest': 1256,
+    'setRest': 1146,
+    'lastRound': 1322,
+    'finish': 1316,
+    'workLast': 2619,
   },
   'baby': {
     'prepare': 766,
@@ -148,11 +149,7 @@ const Map<String, Map<String, int>> seqDurMs = {
 };
 
 /// 5·4·3·2·1 이 1초 간격으로 들어 있는 묶음 파일의 길이(ms)
-const Map<String, int> cntDurMs = {
-  'male': 4386,
-  'female': 4453,
-  'baby': 4388,
-};
+const Map<String, int> cntDurMs = {'male': 4386, 'female': 4453, 'baby': 4388};
 
 /// 묶음 안에서 숫자 '5' 가 시작하는 위치 = 0ms.
 /// 숫자 간격은 정확히 1초, 마지막 숫자 '1' 은 4000ms 에서 시작한다.
@@ -180,7 +177,8 @@ class AnnouncePlan {
 
   bool get isEmpty => sfx == null && voices.isEmpty;
 
-  String seqAssetFor(VoiceStyle style) => 'audio/seq_${style.assetKey}_$key.wav';
+  String seqAssetFor(VoiceStyle style) =>
+      'audio/seq_${style.assetKey}_$key.wav';
 
   @override
   String toString() =>
@@ -505,6 +503,23 @@ class _Channel {
     }
   }
 
+  /// 웹 전용: 동기적으로 재생을 시도하고 성공 여부를 돌려준다.
+  /// 같은 역할의 이전 재생은 브리지가 먼저 정지시킨다 (interrupt).
+  bool webPlayNow(
+    String asset, {
+    required int startAtMs,
+    required double volume,
+  }) {
+    _gen++;
+    return AudioCoach._web.play(
+      asset,
+      role: label,
+      volume: volume,
+      offsetMs: startAtMs,
+      interrupt: true,
+    );
+  }
+
   /// 즉시 침묵. 세대를 올려 진행 중이던 재생도 함께 폐기한다.
   void stop() {
     _gen++;
@@ -684,7 +699,7 @@ class AudioCoach {
     for (final key in seqDurMs[s.assetKey]!.keys) {
       assets.add('audio/seq_${s.assetKey}_$key.wav');
     }
-    assets.add('audio/cnt_${s.assetKey}.wav');
+    assets.add('audio/cnt_v7_${s.assetKey}.wav');
     for (var n = 1; n <= 5; n++) {
       assets.add('audio/c_${s.assetKey}_$n.wav');
       assets.add('audio/st_${s.assetKey}_${_stateKeys[n - 1]}.wav');
@@ -728,12 +743,10 @@ class AudioCoach {
         assets.add('audio/seq_${voiceStyle.assetKey}_$key.wav');
       }
     }
-    assets.add('audio/cnt_${voiceStyle.assetKey}.wav');
+    assets.add('audio/cnt_v7_${voiceStyle.assetKey}.wav');
     // 가장 먼저 울릴 '준비' 안내와 카운트다운 묶음은 반드시 준비해 둔다.
-    await _seq.preload(
-      'audio/seq_${voiceStyle.assetKey}_prepare.wav',
-    );
-    await _count.preload('audio/cnt_${voiceStyle.assetKey}.wav');
+    await _seq.preload('audio/seq_${voiceStyle.assetKey}_prepare.wav');
+    await _count.preload('audio/cnt_v7_${voiceStyle.assetKey}.wav');
     await _sfx.preload(Sfx.work.asset);
     if (kDebugMode) debugPrint('warmUp: ${assets.length} assets ready');
   }
@@ -802,12 +815,22 @@ class AudioCoach {
   ///
   /// 위치(ms)를 직접 주면 묶음 타임라인 위의 정확한 지점으로 이동하므로
   /// 몇 번을 다시 걸어도 겹치지 않고 벽시계와 어긋나지 않는다.
-  void playCountBundleAt(int positionMs) {
-    if (!_anySound || !voiceEnabled) return;
+  ///
+  /// 반환값: 실제로 재생이 시작되었는가.
+  /// 웹에서는 디코딩 전이거나 오디오가 잠겨 있으면 false 가 돌아온다.
+  /// 호출자는 false 일 때 "재생 중" 표시를 하면 안 된다 (다음 숫자에서 재시도).
+  bool playCountBundleAt(int positionMs) {
+    if (!_anySound || !voiceEnabled) return false;
     final pos = positionMs.clamp(0, countBundleLastMs);
-    final asset = 'audio/cnt_${voiceStyle.assetKey}.wav';
+    final asset = 'audio/cnt_v7_${voiceStyle.assetKey}.wav';
+    if (_web.available) {
+      final ok = _count.webPlayNow(asset, startAtMs: pos, volume: voiceVolume);
+      if (ok) _log(asset, 'count@pos$pos');
+      return ok;
+    }
     _count.play(asset, startAtMs: pos, volume: voiceVolume);
     _log(asset, 'count@pos$pos');
+    return true;
   }
 
   /// 단일 숫자 재생 (음성 꺼짐 → 틱 / 복귀 경로).

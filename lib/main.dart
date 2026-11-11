@@ -29,14 +29,15 @@ void main() async {
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      statusBarBrightness: Brightness.dark,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
       systemNavigationBarColor: AppColors.background,
-      systemNavigationBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
   await AudioCoach.instance.init();
   await NotificationService.instance.init();
+  NotificationService.instance.cancelLegacyRoutineAlarms();
   runApp(const TabataApp());
 }
 
@@ -289,9 +290,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   Future<void> _openHistory() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const HistoryScreen()),
-    );
+    await Navigator.of(
+      context,
+    ).push<void>(MaterialPageRoute(builder: (_) => const HistoryScreen()));
     final records = await WorkoutStore.load(force: true);
     if (!mounted) return;
     setState(() => _todayCount = WorkoutStore.today(records).length);
@@ -306,18 +307,21 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     // 버튼을 누른 지금이 **가장 확실한 제스처 시점**이므로, 여기서
     // 잠금을 풀고 이번 세션에 쓸 음성 파일을 미리 받아 둔 뒤 타이머를
     // 시작한다. 파일이 준비되기 전에 타이머가 먼저 흐르는 문제를 막는다.
-    if (!_audioReady) {
-      try {
-        await AudioCoach.instance.unlock();
+    // 잠금은 제스처마다 다시 확인한다. iOS 는 전화·화면 잠금·앱 전환 뒤
+    // 컨텍스트를 중단 상태로 두며, 그 상태는 **새 제스처**에서만 풀린다.
+    // 한 번 풀었다고 건너뛰면 그 뒤 세션 전체가 무음이 된다.
+    try {
+      await AudioCoach.instance.unlock();
+      if (!_audioReady) {
         await AudioCoach.instance
             .preloadForSession(style: _config.voiceStyle)
             .timeout(const Duration(seconds: 4), onTimeout: () {});
-      } catch (_) {
-        // 오디오를 못 준비해도 타이머는 반드시 시작한다.
       }
-      if (!mounted) return;
-      setState(() => _audioReady = true);
+    } catch (_) {
+      // 오디오를 못 준비해도 타이머는 반드시 시작한다.
     }
+    if (!mounted) return;
+    if (!_audioReady) setState(() => _audioReady = true);
 
     _engine.start();
     NotificationService.instance.scheduleSession(_engine);
@@ -449,11 +453,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   /// 첫 터치에서 한 번만 오디오를 준비한다.
   void _warmAudioOnce() {
+    // 잠금 해제는 터치마다 시도한다 (이미 풀린 상태면 비용이 거의 없다).
+    // 사전 로딩은 한 번만 한다.
+    unawaited(AudioCoach.instance.unlock().catchError((_) => false));
     if (_audioReady) return;
     _audioReady = true;
     unawaited(() async {
       try {
-        await AudioCoach.instance.unlock();
         await AudioCoach.instance.preloadForSession(style: _config.voiceStyle);
         if (!mounted) return;
         setState(() {});

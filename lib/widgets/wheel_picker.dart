@@ -118,53 +118,53 @@ class _WheelColumnState extends State<WheelColumn> {
               return false;
             },
             child: ListWheelScrollView.useDelegate(
-            controller: _ctrl,
-            itemExtent: extent,
-            physics: widget.enabled
-                ? const FixedExtentScrollPhysics()
-                : const NeverScrollableScrollPhysics(),
-            diameterRatio: 1.55,
-            perspective: 0.0035,
-            squeeze: 1.0,
-            useMagnifier: true,
-            magnification: 1.32,
-            overAndUnderCenterOpacity: 0.34,
-            onSelectedItemChanged: (index) {
-              final v = widget.min + index.clamp(0, _count - 1);
-              if (v == _current) return;
-              _current = v;
-              widget.onChanged(v);
-            },
-            childDelegate: ListWheelChildBuilderDelegate(
-              childCount: _count,
-              builder: (context, index) {
-                final v = widget.min + index;
-                final selected = v == _current;
-                return Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '${v.toString().padLeft(2, '0')}${widget.suffix}',
-                      maxLines: 1,
-                      style: TextStyle(
-                        color: selected
-                            ? (widget.enabled
-                                  ? AppColors.textPrimary
-                                  : AppColors.textTertiary)
-                            : AppColors.textSecondary,
-                        fontSize: selected ? 27 : 20,
-                        height: 1.0,
-                        fontWeight: selected
-                            ? FontWeight.w800
-                            : FontWeight.w600,
-                        letterSpacing: -0.5,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+              controller: _ctrl,
+              itemExtent: extent,
+              physics: widget.enabled
+                  ? const FixedExtentScrollPhysics()
+                  : const NeverScrollableScrollPhysics(),
+              diameterRatio: 1.55,
+              perspective: 0.0035,
+              squeeze: 1.0,
+              useMagnifier: true,
+              magnification: 1.32,
+              overAndUnderCenterOpacity: 0.34,
+              onSelectedItemChanged: (index) {
+                final v = widget.min + index.clamp(0, _count - 1);
+                if (v == _current) return;
+                _current = v;
+                widget.onChanged(v);
+              },
+              childDelegate: ListWheelChildBuilderDelegate(
+                childCount: _count,
+                builder: (context, index) {
+                  final v = widget.min + index;
+                  final selected = v == _current;
+                  return Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        '${v.toString().padLeft(2, '0')}${widget.suffix}',
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: selected
+                              ? (widget.enabled
+                                    ? AppColors.textPrimary
+                                    : AppColors.textTertiary)
+                              : AppColors.textSecondary,
+                          fontSize: selected ? 27 : 20,
+                          height: 1.0,
+                          fontWeight: selected
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                          letterSpacing: -0.5,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
             ),
           ),
         ],

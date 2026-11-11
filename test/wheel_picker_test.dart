@@ -82,10 +82,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.drag(
-        find.byType(ListWheelScrollView),
-        const Offset(0, 132),
-      );
+      await tester.drag(find.byType(ListWheelScrollView), const Offset(0, 132));
       await tester.pumpAndSettle();
 
       expect(
@@ -162,10 +159,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // 크게 아래로 드래그 (0 아래로는 안 내려감)
-      await tester.drag(
-        find.byType(ListWheelScrollView),
-        const Offset(0, 600),
-      );
+      await tester.drag(find.byType(ListWheelScrollView), const Offset(0, 600));
       await tester.pumpAndSettle();
       expect(value, 0);
 

@@ -2,9 +2,11 @@ import 'phase.dart';
 
 /// 카운트다운 · 상태 안내 음성 종류
 enum VoiceStyle {
-  male('남성', '또렷하고 안정적인 코치 목소리'),
-  female('여성', '차분하고 낮은 톤의 선생님 목소리'),
-  baby('아기', '귀엽고 잔망스러운 캐릭터 목소리');
+  // 키(male/female/baby)는 저장된 설정과 파일명에 쓰이므로 바꾸지 않는다.
+  // 표시 이름과 설명만 바꾼다.
+  male('스포츠 MC', '빠르고 열정적인 스포츠 중계 톤'),
+  female('화난 코치', '단호하고 힘 있는 중년 여성 코치 톤'),
+  baby('어린 캐릭터', '통통 튀는 어린 캐릭터 톤');
 
   const VoiceStyle(this.label, this.description);
 

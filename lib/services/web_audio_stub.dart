@@ -28,8 +28,7 @@ class WebAudio {
     int offsetMs = 0,
     int whenMs = 0,
     bool interrupt = true,
-  }) =>
-      false;
+  }) => false;
 
   /// 특정 역할의 소리를 멈춘다
   void stopRole(String role) {}

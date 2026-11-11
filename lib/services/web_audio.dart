@@ -4,5 +4,4 @@
 /// * 그 외 → 아무것도 하지 않는 스텁 (모바일은 audioplayers 사용)
 library;
 
-export 'web_audio_stub.dart'
-    if (dart.library.js_interop) 'web_audio_impl.dart';
+export 'web_audio_stub.dart' if (dart.library.js_interop) 'web_audio_impl.dart';

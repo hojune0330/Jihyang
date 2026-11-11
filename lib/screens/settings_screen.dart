@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/tabata_config.dart';
 import '../services/audio_coach.dart';
+import '../services/preset_store.dart';
 import '../theme/app_theme.dart';
 import '../utils/fmt.dart';
 import '../widgets/wheel_picker.dart';
@@ -21,11 +22,106 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late TabataConfig _c;
+  List<WorkoutPreset> _presets = const <WorkoutPreset>[];
 
   @override
   void initState() {
     super.initState();
     _c = widget.initial;
+    _loadPresets();
+  }
+
+  Future<void> _loadPresets() async {
+    final list = await PresetStore.load();
+    if (!mounted) return;
+    setState(() => _presets = list);
+  }
+
+  /// 현재 운동 구성을 이름 붙여 저장
+  Future<void> _savePreset() async {
+    final ctrl = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('운동 구성 이름'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLength: 12,
+          decoration: const InputDecoration(hintText: '예: 아침 타바타'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(ctrl.text),
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (name == null) return;
+    final added = await PresetStore.add(name, _workoutOnly(_c));
+    if (!mounted) return;
+    if (added == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('구성은 최대 30개까지 저장할 수 있어요.')));
+      return;
+    }
+    await _loadPresets();
+  }
+
+  /// 운동 구성 5개 필드만 골라낸 설정 (사운드 설정은 구성에 포함하지 않음)
+  static TabataConfig _workoutOnly(TabataConfig c) => TabataConfig(
+    workSeconds: c.workSeconds,
+    restSeconds: c.restSeconds,
+    rounds: c.rounds,
+    sets: c.sets,
+    setRestSeconds: c.setRestSeconds,
+  );
+
+  /// 저장된 구성의 운동 5개 필드만 편집 중인 설정에 불러온다 (저장 버튼을 눌러야 메인에 반영)
+  void _applyPreset(WorkoutPreset p) {
+    final w = p.config;
+    _update(
+      _c.copyWith(
+        workSeconds: w.workSeconds,
+        restSeconds: w.restSeconds,
+        rounds: w.rounds,
+        sets: w.sets,
+        setRestSeconds: w.setRestSeconds,
+      ),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('"${p.name}" 구성을 불러왔어요. 저장을 눌러 적용하세요.')),
+    );
+  }
+
+  Future<void> _deletePreset(WorkoutPreset p) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('"${p.name}" 삭제'),
+        content: const Text('저장된 운동 구성을 삭제할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await PresetStore.remove(p.id);
+    await _loadPresets();
   }
 
   void _update(TabataConfig next) {
@@ -175,6 +271,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _summaryCard(),
 
             const SizedBox(height: 26),
+            const _SectionLabel('저장한 운동 구성'),
+            const SizedBox(height: 6),
+            _presetSection(),
+
+            const SizedBox(height: 26),
             const _SectionLabel('사운드'),
             const SizedBox(height: 4),
             _switchRow(
@@ -214,8 +315,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               accent: AppColors.prepare,
               enabled: _c.soundEnabled && _c.voiceEnabled,
               onChanged: (v) => _update(_c.copyWith(voiceVolume: v)),
-              onPreview: () =>
-                  AudioCoach.instance.previewVoice(_c.voiceStyle),
+              onPreview: () => AudioCoach.instance.previewVoice(_c.voiceStyle),
             ),
             const SizedBox(height: 6),
             _voiceStyleSection(),
@@ -650,6 +750,110 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _presetSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: FilledButton.icon(
+            onPressed: _presets.length >= PresetStore.maxPresets
+                ? null
+                : _savePreset,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.work,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            icon: const Icon(Icons.add_rounded, size: 20),
+            label: const Text(
+              '현재 구성 저장',
+              style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        if (_presets.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+            child: Text(
+              '자주 쓰는 운동 구성을 저장해 두면 여기서 바로 불러올 수 있어요.',
+              style: TextStyle(
+                color: AppColors.textTertiary.withValues(alpha: 0.95),
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+          )
+        else
+          for (final p in _presets) ...[
+            _presetTile(p),
+            const SizedBox(height: 8),
+          ],
+      ],
+    );
+  }
+
+  Widget _presetTile(WorkoutPreset p) {
+    final c = p.config;
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _applyPreset(p),
+        onLongPress: () => _deletePreset(p),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 13, 6, 13),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      p.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '운동 ${fmtClock(c.workSeconds)} · 휴식 ${c.restSeconds == 0 ? '없음' : fmtClock(c.restSeconds)} · ${c.rounds}라운드'
+                      '${c.sets > 1 ? ' · ${c.sets}세트' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: '삭제',
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: AppColors.textTertiary,
+                ),
+                onPressed: () => _deletePreset(p),
+              ),
+            ],
+          ),
         ),
       ),
     );

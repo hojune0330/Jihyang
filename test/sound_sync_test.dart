@@ -35,10 +35,7 @@ void main() {
     test('주의음이 끝난 뒤에 첫 음성이 시작된다', () {
       for (final style in VoiceStyle.values) {
         final t = announceTiming(
-          const AnnouncePlan(
-            sfx: Sfx.work,
-            voices: [StateVoice.startWork],
-          ),
+          const AnnouncePlan(sfx: Sfx.work, voices: [StateVoice.startWork]),
           style,
           sfxEnabled: true,
           voiceEnabled: true,
@@ -68,7 +65,8 @@ void main() {
         );
         expect(t.voiceStartsAt.length, 2);
         final firstEnds =
-            t.voiceStartsAt[0] + stateVoiceDurationMs(style, StateVoice.startWork);
+            t.voiceStartsAt[0] +
+            stateVoiceDurationMs(style, StateVoice.startWork);
         expect(
           t.voiceStartsAt[1],
           greaterThanOrEqualTo(firstEnds),
@@ -141,8 +139,12 @@ void main() {
             totalSets: 2,
             totalRounds: 3,
           );
-          final t = announceTiming(plan, style,
-              sfxEnabled: true, voiceEnabled: true);
+          final t = announceTiming(
+            plan,
+            style,
+            sfxEnabled: true,
+            voiceEnabled: true,
+          );
           expect(
             announceGuardMs(plan, style),
             greaterThan(t.totalMs),
@@ -173,8 +175,7 @@ void main() {
       }
 
       // 같은 구간이 연속 두 번 기록되면 중복 안내다
-      expect(enters.toSet().length, enters.length,
-          reason: '중복 구간 진입: $enters');
+      expect(enters.toSet().length, enters.length, reason: '중복 구간 진입: $enters');
       e.dispose();
     });
 
@@ -196,8 +197,7 @@ void main() {
           .where((c) => c.label.startsWith('count'))
           .map((c) => c.label)
           .toList();
-      expect(counts.toSet().length, counts.length,
-          reason: '중복 발화: $counts');
+      expect(counts.toSet().length, counts.length, reason: '중복 발화: $counts');
       e.dispose();
     });
 
@@ -213,8 +213,7 @@ void main() {
           .where((c) => c.label.startsWith('count'))
           .map((c) => c.label)
           .toList();
-      expect(counts.toSet().length, counts.length,
-          reason: '중복 발화: $counts');
+      expect(counts.toSet().length, counts.length, reason: '중복 발화: $counts');
       e.dispose();
     });
 
@@ -232,8 +231,11 @@ void main() {
               .where((c) => c.label.startsWith('count'))
               .map((c) => c.label)
               .toList();
-          expect(counts.toSet().length, counts.length,
-              reason: '$w초 중복: $counts');
+          expect(
+            counts.toSet().length,
+            counts.length,
+            reason: '$w초 중복: $counts',
+          );
           // 5초 이상이므로 최소한 마지막 숫자 '1'은 반드시 울려야 한다
           expect(counts.contains('count1'), true, reason: '$w초: $counts');
           e.dispose();
@@ -303,18 +305,21 @@ void main() {
           expect(p, endsWith('.wav'));
         }
         for (var n = 5; n >= 1; n--) {
-          expect('audio/c_${style.assetKey}_$n.wav',
-              contains('c_${style.name}_'));
+          expect(
+            'audio/c_${style.assetKey}_$n.wav',
+            contains('c_${style.name}_'),
+          );
         }
       }
     });
 
     test('아기 목소리 자산 키가 c_baby / st_baby 로 정확히 만들어진다', () {
       expect(VoiceStyle.baby.assetKey, 'baby');
-      expect(StateVoice.startWork.assetFor(VoiceStyle.baby),
-          'audio/st_baby_startWork.wav');
-      expect('audio/c_${VoiceStyle.baby.assetKey}_5.wav',
-          'audio/c_baby_5.wav');
+      expect(
+        StateVoice.startWork.assetFor(VoiceStyle.baby),
+        'audio/st_baby_startWork.wav',
+      );
+      expect('audio/c_${VoiceStyle.baby.assetKey}_5.wav', 'audio/c_baby_5.wav');
     });
   });
 }
