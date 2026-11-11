@@ -120,12 +120,12 @@ class GlassTokens {
   // ------------------------------------------------------------ 글자색 §4-4
   static const Color ink = Color(0xFF15161B);
   static const Color sub = Color(0xFF5B5F6E);
-  static const Color tert = Color(0xFF8A8E9C);
+  static const Color tert = Color(0xFF747886);
 
   /// 흰 유리 위 글자 전용 진한 상태색 (대비 4.5:1 확보)
-  static const Color workText = Color(0xFFC24A42);
-  static const Color restText = Color(0xFF3466BA);
-  static const Color prepText = Color(0xFF8A6800);
+  static const Color workText = Color(0xFFAD3F38);
+  static const Color restText = Color(0xFF2F5DAA);
+  static const Color prepText = Color(0xFF7A5C00);
 
   /// 상태 이름 → 글자용 진한 색
   static Color textOf(String phaseType) => switch (phaseType) {
