@@ -19,6 +19,7 @@ import 'services/session_store.dart';
 import 'services/tabata_engine.dart';
 import 'services/workout_store.dart';
 import 'theme/app_theme.dart';
+import 'theme/glass/glass.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,7 +32,7 @@ void main() async {
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
       statusBarBrightness: Brightness.light,
-      systemNavigationBarColor: AppColors.background,
+      systemNavigationBarColor: GlassTokens.ambientBottom,
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
@@ -331,41 +332,19 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final pauseBefore = _engine.isRunning;
     if (pauseBefore) _engine.pause();
 
-    final quit = await showDialog<bool>(
+    final quit = await showGlassDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceHigh,
-        title: const Text(
-          '운동을 종료할까요?',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+      title: '운동을 종료할까요?',
+      message: '지금까지 진행한 내용은 운동 기록에 "중도 종료"로 저장됩니다.',
+      actions: const [
+        GlassDialogAction(label: '계속하기', value: false),
+        GlassDialogAction(
+          label: '종료',
+          value: true,
+          destructive: true,
+          primary: true,
         ),
-        content: const Text(
-          '지금까지 진행한 내용은 운동 기록에 "중도 종료"로 저장됩니다.',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 13.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text(
-              '계속하기',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text(
-              '종료',
-              style: TextStyle(
-                color: AppColors.work,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        ],
-      ),
+      ],
     );
 
     if (!mounted) return;
@@ -416,7 +395,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     if (!_loaded) {
       return const Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: GlassTokens.ambientTop,
         body: Center(
           child: SizedBox(
             width: 24,
@@ -437,7 +416,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         if (_screen == AppScreen.running) _confirmStop();
       },
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: GlassTokens.ambientTop,
         body: Listener(
           // 웹 브라우저는 **사용자 제스처 안에서만** 오디오 잠금을 풀 수 있다.
           // 앱 어디를 처음 눌러도 그 순간 잠금을 풀고 음성 파일을 미리 받아

@@ -17,6 +17,7 @@ import 'package:tabata_timer/screens/settings_screen.dart';
 import 'package:tabata_timer/services/tabata_engine.dart';
 import 'package:tabata_timer/services/workout_store.dart';
 import 'package:tabata_timer/theme/app_theme.dart';
+import 'package:tabata_timer/theme/glass/glass.dart';
 
 /// 글래스 디자인 개선 전/후 비교용 화면 캡처.
 ///
@@ -218,6 +219,59 @@ void main() {
       }
     });
   }
+
+  testWidgets('캡처: 종료 확인 다이얼로그', (tester) async {
+    const key = ValueKey('shot');
+    final engine = TabataEngine(config: cfg)..audioOutputEnabled = false;
+    engine.start();
+    engine.skip();
+    engine.pause();
+    await _pump(
+      tester,
+      key,
+      Builder(
+        builder: (ctx) => RunningScreen(
+          engine: engine,
+          onPauseToggle: () {},
+          onStop: () => showGlassDialog<bool>(
+            context: ctx,
+            title: '운동을 종료할까요?',
+            message: '지금까지 진행한 내용은 운동 기록에 "중도 종료"로 저장됩니다.',
+            actions: const [
+              GlassDialogAction(label: '계속하기', value: false),
+              GlassDialogAction(
+                label: '종료',
+                value: true,
+                destructive: true,
+                primary: true,
+              ),
+            ],
+          ),
+          onSkip: () {},
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('운동 종료'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 400));
+    final dir = Directory('docs/glass/$_stage')..createSync(recursive: true);
+    await tester.runAsync(() async {
+      final layer = tester.binding.renderViews.first.debugLayer! as OffsetLayer;
+      final image = await layer.toImage(
+        Offset.zero & tester.view.physicalSize,
+        pixelRatio: 1,
+      );
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      File(
+        '${dir.path}/4_running_dialog.png',
+      ).writeAsBytesSync(bytes!.buffer.asUint8List());
+    });
+    engine.reset();
+    engine.dispose();
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(seconds: 3));
+    }
+  });
 
   testWidgets('캡처: 완료', (tester) async {
     const key = ValueKey('shot');

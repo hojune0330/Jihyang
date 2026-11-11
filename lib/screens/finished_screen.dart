@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/glass/glass.dart';
 
 /// 화면 3 — 운동 완료 화면
+///
+/// 글래스 시스템 §2 'finished' 배경(코랄·옐로 오브를 크게) 위에
+/// 완료 배지 → 총 운동 시간(가장 큰 유리 카드) → 세트/라운드 → 버튼 순.
 class FinishedScreen extends StatelessWidget {
   const FinishedScreen({
     super.key,
@@ -26,120 +30,113 @@ class FinishedScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
-          child: Column(
-            children: [
-              const Spacer(flex: 2),
-              const Icon(
-                Icons.check_circle_outline_rounded,
-                size: 72,
-                color: AppColors.work,
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                '운동 완료',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 34,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.8,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                elapsedTime,
-                style: const TextStyle(
-                  color: AppColors.prepare,
-                  fontSize: 44,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -1,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                '총 운동 시간',
-                style: TextStyle(
-                  color: AppColors.textTertiary,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.6,
-                ),
-              ),
-              const Spacer(),
-              Row(
-                children: [
-                  if (totalSets > 1)
-                    Expanded(
-                      child: _stat(
-                        '완료 세트',
-                        '$sets / $totalSets',
-                        AppColors.rest,
+      backgroundColor: GlassTokens.ambientTop,
+      body: GlassBackdrop.ambient(
+        preset: BackdropPreset.finished,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            child: Column(
+              children: [
+                const Spacer(flex: 2),
+                // 완료 배지 — 코랄 유리 원 + 체크
+                SizedBox(
+                  width: 92,
+                  height: 92,
+                  child: GlassSurface(
+                    radius: GlassTokens.rPill,
+                    tint: AppColors.work,
+                    tintStrength: 2.2,
+                    child: const Center(
+                      child: Icon(
+                        Icons.check_rounded,
+                        size: 52,
+                        color: GlassTokens.workText,
                       ),
                     ),
-                  if (totalSets > 1) const SizedBox(width: 12),
-                  Expanded(
-                    child: _stat('완료 라운드', '$rounds', AppColors.prepare),
                   ),
-                ],
-              ),
-              const Spacer(flex: 2),
-              SizedBox(
-                height: 70,
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: onRestart,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.work,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  '운동 완료',
+                  style: TextStyle(
+                    color: GlassTokens.ink,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.8,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                // 총 운동 시간 — 가장 큰 카드
+                GlassSurface(
+                  material: GlassMaterial.regular,
+                  radius: GlassTokens.rLg,
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      children: [
+                        Text(
+                          elapsedTime,
+                          style: const TextStyle(
+                            color: GlassTokens.ink,
+                            fontSize: 52,
+                            height: 1.0,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -1.6,
+                            fontFeatures: GlassTokens.tabular,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          '총 운동 시간',
+                          style: TextStyle(
+                            color: GlassTokens.sub,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.6,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.replay_rounded, size: 28),
-                      SizedBox(width: 6),
-                      Text(
-                        '다시 시작',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.3,
+                ),
+                const SizedBox(height: GlassTokens.s3),
+                Row(
+                  children: [
+                    if (totalSets > 1)
+                      Expanded(
+                        child: _stat(
+                          '완료 세트',
+                          '$sets / $totalSets',
+                          GlassTokens.restText,
                         ),
                       ),
-                    ],
-                  ),
+                    if (totalSets > 1) const SizedBox(width: GlassTokens.s3),
+                    Expanded(
+                      child: _stat('완료 라운드', '$rounds', GlassTokens.prepText),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 62,
-                width: double.infinity,
-                child: OutlinedButton(
+                const Spacer(flex: 3),
+                GlassButton.filled(
+                  label: '다시 시작',
+                  icon: Icons.replay_rounded,
+                  color: AppColors.work,
+                  height: 70,
+                  fontSize: 20,
+                  onPressed: onRestart,
+                ),
+                const SizedBox(height: 12),
+                GlassButton.glass(
+                  label: '메인 화면으로',
+                  height: 60,
+                  fontSize: 17,
                   onPressed: onHome,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(
-                      color: AppColors.divider,
-                      width: 1.2,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Text(
-                    '메인 화면으로',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
-            ],
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
       ),
@@ -158,34 +155,34 @@ class FinishedScreen extends StatelessWidget {
   }
 
   Widget _stat(String label, String value, Color color) {
-    return Container(
+    return GlassSurface(
+      radius: GlassTokens.rMd,
       padding: const EdgeInsets.symmetric(vertical: 16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              color: color,
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              fontFeatures: const [FontFeature.tabularFigures()],
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+                fontFeatures: GlassTokens.tabular,
+              ),
             ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textTertiary,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: const TextStyle(
+                color: GlassTokens.sub,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
