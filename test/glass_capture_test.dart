@@ -21,7 +21,7 @@ import 'package:tabata_timer/theme/app_theme.dart';
 /// 글래스 디자인 개선 전/후 비교용 화면 캡처.
 ///
 /// 실행: flutter test test/glass_capture_test.dart --dart-define=GLASS_STAGE=before
-/// 결과: docs/glass/<stage>/*.png (390x844 @2x)
+/// 결과: docs/glass/(stage)/*.png (390x844 @2x)
 const _stage = String.fromEnvironment('GLASS_STAGE', defaultValue: 'tmp');
 
 Future<void> _loadFonts() async {

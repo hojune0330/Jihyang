@@ -195,7 +195,14 @@ class AppTheme {
         surface: AppColors.surface,
         onSurface: AppColors.textPrimary,
       ),
-      splashFactory: InkRipple.splashFactory,
+      // 글래스 시스템 §5: 물결(ripple) 대신 눌림 축소 + 스프링 복귀를 쓴다.
+      splashFactory: NoSplash.splashFactory,
+      highlightColor: Colors.transparent,
+      splashColor: Colors.transparent,
+      textSelectionTheme: const TextSelectionThemeData(
+        cursorColor: AppColors.work,
+        selectionHandleColor: AppColors.work,
+      ),
       dividerColor: AppColors.divider,
       textTheme: text,
       primaryTextTheme: text,
