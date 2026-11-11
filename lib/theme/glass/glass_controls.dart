@@ -166,17 +166,9 @@ class _FilledGlass extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: ShapeDecoration(
-        shape: GlassTokens.shape(radius),
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color.alphaBlend(Colors.white.withValues(alpha: 0.18), color),
-            color,
-          ],
-        ),
-        shadows: [
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: [
           BoxShadow(
             color: color.withValues(alpha: 0.38),
             blurRadius: 22,
@@ -195,6 +187,21 @@ class _FilledGlass extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color.alphaBlend(
+                      Colors.white.withValues(alpha: 0.18),
+                      color,
+                    ),
+                    color,
+                  ],
+                ),
+              ),
+            ),
             // 위쪽 광택 (반사광)
             IgnorePointer(
               child: DecoratedBox(
@@ -264,7 +271,7 @@ class GlassIconButton extends StatelessWidget {
           child: GlassSurface(
             material: material,
             onColor: onColor,
-            radius: size / 2,
+            radius: GlassTokens.rPill,
             child: Center(
               child: Icon(icon, size: size * 0.46, color: iconColor),
             ),

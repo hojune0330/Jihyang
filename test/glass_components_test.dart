@@ -136,7 +136,7 @@ void main() {
       );
       expect(find.text('유리'), findsOneWidget);
       expect(find.byType(BackdropFilter), findsOneWidget);
-      expect(find.byType(ClipRSuperellipse), findsOneWidget);
+      expect(find.byType(ClipRSuperellipse), findsOneWidget); // 카드 = squircle
       expect(
         find.descendant(
           of: find.byType(GlassSurface),

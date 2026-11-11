@@ -46,6 +46,11 @@ class GlassSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final spec = GlassTokens.spec(material);
     final br = BorderRadius.circular(radius);
+    // 알약/원(rPill)은 superellipse 대신 stadium 으로 그린다. 곡률이 변 길이의
+    // 절반을 넘는 superellipse 는 가장자리에 가시 잔상이 생긴다 (D3 실기 캡처).
+    final pill = radius >= 100;
+    ShapeBorder shapeOf() =>
+        pill ? const StadiumBorder() : GlassTokens.shape(radius);
     final fill = onColor ? spec.fillOnColor : spec.fillLight;
     final t = tint;
 
@@ -64,7 +69,7 @@ class GlassSurface extends StatelessWidget {
 
     Widget body = DecoratedBox(
       decoration: ShapeDecoration(
-        shape: GlassTokens.shape(radius),
+        shape: shapeOf(),
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
@@ -78,7 +83,7 @@ class GlassSurface extends StatelessWidget {
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: ShapeDecoration(
-                  shape: GlassTokens.shape(radius),
+                  shape: shapeOf(),
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
@@ -99,6 +104,7 @@ class GlassSurface extends StatelessWidget {
               child: CustomPaint(
                 painter: _RimPainter(
                   radius: radius,
+                  pill: pill,
                   top: Colors.white.withValues(alpha: spec.rimTop),
                   bottom: Colors.white.withValues(alpha: spec.rimBottom),
                 ),
@@ -116,13 +122,16 @@ class GlassSurface extends StatelessWidget {
       );
     }
 
-    body = ClipRSuperellipse(borderRadius: br, child: body);
+    body = pill
+        ? ClipRRect(borderRadius: br, child: body)
+        : ClipRSuperellipse(borderRadius: br, child: body);
 
     if (!shadow) return body;
+    // 그림자는 둥근 사각형으로 그린다 (흐린 그림자라 모양 차이는 안 보인다).
     return DecoratedBox(
-      decoration: ShapeDecoration(
-        shape: GlassTokens.shape(radius),
-        shadows: GlassTokens.shadow(onColor: onColor),
+      decoration: BoxDecoration(
+        borderRadius: br,
+        boxShadow: GlassTokens.shadow(onColor: onColor),
       ),
       child: body,
     );
@@ -131,9 +140,15 @@ class GlassSurface extends StatelessWidget {
 
 /// 위가 밝고 아래로 옅어지는 1px rim — 애플 유리 가장자리 반짝임
 class _RimPainter extends CustomPainter {
-  _RimPainter({required this.radius, required this.top, required this.bottom});
+  _RimPainter({
+    required this.radius,
+    required this.pill,
+    required this.top,
+    required this.bottom,
+  });
 
   final double radius;
+  final bool pill;
   final Color top;
   final Color bottom;
 
@@ -141,9 +156,15 @@ class _RimPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     const w = GlassTokens.rimWidth;
     final rect = (Offset.zero & size).deflate(w / 2);
-    final r = Radius.circular((radius - w / 2).clamp(0, double.infinity));
-    final path = Path()
-      ..addRSuperellipse(RSuperellipse.fromRectAndRadius(rect, r));
+    final path = Path();
+    if (pill) {
+      path.addRRect(
+        RRect.fromRectAndRadius(rect, Radius.circular(rect.shortestSide / 2)),
+      );
+    } else {
+      final r = Radius.circular((radius - w / 2).clamp(0, double.infinity));
+      path.addRSuperellipse(RSuperellipse.fromRectAndRadius(rect, r));
+    }
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = w
@@ -162,5 +183,8 @@ class _RimPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _RimPainter old) =>
-      old.radius != radius || old.top != top || old.bottom != bottom;
+      old.radius != radius ||
+      old.pill != pill ||
+      old.top != top ||
+      old.bottom != bottom;
 }

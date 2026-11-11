@@ -1,34 +1,22 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../models/tabata_config.dart';
 import '../theme/app_theme.dart';
+import '../theme/glass/glass.dart';
 import '../utils/fmt.dart';
 
-/// 메인 화면 전용 밝은 유리(글래스) 팔레트.
-/// 설정·진행·기록 화면은 기존 다크 팔레트(AppColors)를 그대로 쓴다.
+/// 메인 화면 글자색 — 글래스 토큰(§4-4) 별칭.
 class _Ui {
   _Ui._();
 
-  static const bgBase = Color(0xFFF3F5FC);
-  static const bgWarm = Color(0xFFFFF4EE);
+  static const ink = GlassTokens.ink;
+  static const sub = GlassTokens.sub;
+  static const tert = GlassTokens.tert;
 
-  // 배경 오브 (카드 뒤에서 유리가 굴절시켜 보여 주는 색)
-  static const orbCoral = Color(0xFFFF9B8A);
-  static const orbSky = Color(0xFF8CC4FF);
-  static const orbAmber = Color(0xFFFFD98A);
-  static const orbMint = Color(0xFF9CE8CF);
-  static const orbLilac = Color(0xFFC7B4FF);
-
-  static const ink = Color(0xFF15161B);
-  static const sub = Color(0xFF5B5F6E);
-  static const tert = Color(0xFF8A8E9C);
-
-  // 글자/라벨용 진한 상태색 (밝은 배경에서 대비 확보)
-  static const work = Color(0xFFD65F57);
-  static const rest = Color(0xFF3B6FC4);
-  static const prep = Color(0xFFF2C94C);
+  // 흰 유리 위 글자/점용 진한 상태색 (대비 4.5:1)
+  static const work = GlassTokens.workText;
+  static const rest = GlassTokens.restText;
+  static const prep = GlassTokens.prepText;
 }
 
 /// 화면 1 — 운동 시작 전 메인 화면
@@ -63,83 +51,36 @@ class ReadyScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _Ui.bgBase,
-      body: Stack(
-        children: [
-          // 배경: 연한 그라데이션 + 색 오브 (유리 카드가 뒤를 흐리게 비추도록)
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [_Ui.bgBase, _Ui.bgWarm],
+      backgroundColor: GlassTokens.ambientTop,
+      body: GlassBackdrop.ambient(
+        preset: BackdropPreset.home,
+        child: SafeArea(
+          child: Column(
+            children: [
+              _topBar(),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    GlassTokens.screenX,
+                    6,
+                    GlassTokens.screenX,
+                    6,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (hasSavedSession) _resumeBanner(),
+                      Expanded(flex: 5, child: _timeCards()),
+                      const SizedBox(height: GlassTokens.s3),
+                      Expanded(flex: 3, child: _countCards()),
+                      const SizedBox(height: GlassTokens.s3),
+                      Expanded(flex: 3, child: _totalCard()),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ),
-          Positioned(
-            left: -110,
-            top: -60,
-            child: _orb(330, _Ui.orbCoral, 0.70),
-          ),
-          Positioned(right: -150, top: 150, child: _orb(360, _Ui.orbSky, 0.65)),
-          Positioned(left: -80, top: 430, child: _orb(260, _Ui.orbAmber, 0.60)),
-          Positioned(
-            right: -90,
-            bottom: 40,
-            child: _orb(300, _Ui.orbMint, 0.55),
-          ),
-          Positioned(
-            left: 60,
-            bottom: -120,
-            child: _orb(260, _Ui.orbLilac, 0.50),
-          ),
-          Positioned.fill(
-            child: SafeArea(
-              child: Column(
-                children: [
-                  _topBar(),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 6, 18, 6),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (hasSavedSession) _resumeBanner(),
-                          Expanded(flex: 5, child: _timeCards()),
-                          const SizedBox(height: 12),
-                          Expanded(flex: 3, child: _countCards()),
-                          const SizedBox(height: 12),
-                          Expanded(flex: 3, child: _totalCard()),
-                        ],
-                      ),
-                    ),
-                  ),
-                  _startArea(),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Widget _orb(double size, Color color, double alpha) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [
-              color.withValues(alpha: alpha),
-              color.withValues(alpha: alpha * 0.45),
-              color.withValues(alpha: 0),
+              _startArea(),
             ],
-            stops: const [0.0, 0.5, 1.0],
           ),
         ),
       ),
@@ -150,48 +91,35 @@ class ReadyScreen extends StatelessWidget {
 
   Widget _topBar() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 10, 10, 6),
+      padding: const EdgeInsets.fromLTRB(22, 10, 16, 6),
       child: Row(
         children: [
-          const Flexible(
+          const Expanded(
             child: Text(
               '타바타 타이머',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: _Ui.ink,
-                fontSize: 18,
+                fontSize: 19,
                 fontWeight: FontWeight.w900,
-                letterSpacing: -0.3,
+                letterSpacing: -0.4,
               ),
             ),
           ),
-          const Spacer(),
-          InkWell(
+          GlassChip(
+            label: todayCount > 0 ? '운동 기록 $todayCount' : '운동 기록',
+            icon: Icons.calendar_month_rounded,
+            color: _Ui.sub,
+            dense: true,
             onTap: onOpenHistory,
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                children: [
-                  Text(
-                    todayCount > 0 ? '운동 기록 $todayCount' : '운동 기록',
-                    style: const TextStyle(
-                      color: _Ui.sub,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
-          IconButton(
-            onPressed: onOpenSettings,
-            iconSize: 24,
+          const SizedBox(width: GlassTokens.s2),
+          GlassIconButton(
+            icon: Icons.settings_rounded,
             tooltip: '설정',
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.settings_outlined, color: _Ui.ink),
+            size: 42,
+            onPressed: onOpenSettings,
           ),
         ],
       ),
@@ -201,11 +129,12 @@ class ReadyScreen extends StatelessWidget {
   Widget _resumeBanner() {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: InkWell(
+      child: GlassPressable(
         onTap: onResumeSession,
-        borderRadius: BorderRadius.circular(14),
-        child: _Glass(
-          radius: 14,
+        semanticLabel: '진행 중이던 운동 이어서 하기',
+        child: GlassSurface(
+          radius: GlassTokens.rSm,
+          tint: AppColors.prepare,
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
           child: const Row(
             children: [
@@ -311,7 +240,8 @@ class ReadyScreen extends StatelessWidget {
           1000,
         );
 
-    return _Glass(
+    return GlassSurface(
+      radius: GlassTokens.rLg,
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -372,12 +302,12 @@ class ReadyScreen extends StatelessWidget {
                     children: [
                       Expanded(
                         flex: workFlex,
-                        child: const ColoredBox(color: _Ui.work),
+                        child: const ColoredBox(color: AppColors.work),
                       ),
                       const SizedBox(width: 2),
                       Expanded(
                         flex: restFlex,
-                        child: const ColoredBox(color: _Ui.rest),
+                        child: const ColoredBox(color: AppColors.rest),
                       ),
                     ],
                   ),
@@ -439,40 +369,19 @@ class ReadyScreen extends StatelessWidget {
 
   Widget _startArea() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
-      child: SizedBox(
+      padding: const EdgeInsets.fromLTRB(
+        GlassTokens.screenX,
+        10,
+        GlassTokens.screenX,
+        18,
+      ),
+      child: GlassButton.filled(
+        label: '운동 시작',
+        icon: Icons.play_arrow_rounded,
+        color: AppColors.work,
         height: 72,
-        width: double.infinity,
-        child: DecoratedBox(
-          decoration: AppColors.glossyButton(AppColors.work),
-          child: FilledButton(
-            onPressed: onStart,
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.transparent,
-              foregroundColor: AppColors.ink,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(17),
-              ),
-              elevation: 0,
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.play_arrow_rounded, size: 32, color: AppColors.ink),
-                SizedBox(width: 6),
-                Text(
-                  '운동 시작',
-                  style: TextStyle(
-                    fontSize: 21,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.4,
-                    color: AppColors.ink,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        fontSize: 21,
+        onPressed: onStart,
       ),
     );
   }
@@ -486,110 +395,6 @@ class ReadyScreen extends StatelessWidget {
     if (m > 0 && s > 0) return '$m분$s초';
     if (m > 0) return '$m분';
     return '$s초';
-  }
-}
-
-/// 반투명 유리 카드.
-/// 뒤 배경을 블러로 비추고, 위쪽 빛 + 얇은 흰 테두리 + 부드러운 그림자로 띄운다.
-/// tint 가 있으면 상태색을 옅게 섞는다.
-class _Glass extends StatelessWidget {
-  const _Glass({
-    required this.child,
-    this.tint,
-    this.radius = 18,
-    this.padding = EdgeInsets.zero,
-  });
-
-  final Widget child;
-  final Color? tint;
-  final double radius;
-  final EdgeInsetsGeometry padding;
-
-  @override
-  Widget build(BuildContext context) {
-    final br = BorderRadius.circular(radius);
-    final t = tint;
-    // 면 색: 위쪽이 더 투명하고 아래로 갈수록 살짝 탁탁해진다
-    final topFill = t == null
-        ? Colors.white.withValues(alpha: 0.22)
-        : Color.alphaBlend(
-            t.withValues(alpha: 0.16),
-            Colors.white.withValues(alpha: 0.22),
-          );
-    final bottomFill = t == null
-        ? Colors.white.withValues(alpha: 0.46)
-        : Color.alphaBlend(
-            t.withValues(alpha: 0.26),
-            Colors.white.withValues(alpha: 0.40),
-          );
-    final edge = t == null
-        ? Colors.white.withValues(alpha: 0.85)
-        : Color.alphaBlend(
-            Colors.white.withValues(alpha: 0.55),
-            t.withValues(alpha: 0.70),
-          );
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: br,
-        boxShadow: [
-          // 넓고 부드러운 바닥 그림자 (띄워 올린 느낌)
-          BoxShadow(
-            color: const Color(0xFF1A1D2E).withValues(alpha: 0.14),
-            blurRadius: 28,
-            spreadRadius: -6,
-            offset: const Offset(0, 14),
-          ),
-          // 가까운 테두리 그림자 (경계 선을 또렴하게)
-          BoxShadow(
-            color: const Color(0xFF1A1D2E).withValues(alpha: 0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: br,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 26, sigmaY: 26),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                stops: const [0.0, 0.55, 1.0],
-                colors: [topFill, topFill, bottomFill],
-              ),
-              borderRadius: br,
-              border: Border.all(color: edge, width: 1.2),
-            ),
-            child: Stack(
-              children: [
-                // 상단 빛 반사(유리 하이라이트)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: br,
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.center,
-                          colors: [
-                            Colors.white.withValues(alpha: 0.55),
-                            Colors.white.withValues(alpha: 0),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Padding(padding: padding, child: child),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -614,8 +419,9 @@ class _BigTimeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effective = muted ? _Ui.tert : accent;
-    return _Glass(
+    return GlassSurface(
       tint: muted ? null : tint,
+      radius: GlassTokens.rLg,
       padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -702,8 +508,8 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Glass(
-      radius: 16,
+    return GlassSurface(
+      radius: GlassTokens.rMd,
       padding: const EdgeInsets.fromLTRB(13, 13, 13, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -733,7 +539,7 @@ class _StatCard extends StatelessWidget {
                       value,
                       maxLines: 1,
                       style: TextStyle(
-                        color: accent == _Ui.prep ? _Ui.ink : accent,
+                        color: accent,
                         fontSize: compact ? 23 : 30,
                         height: 1.0,
                         fontWeight: FontWeight.w900,
