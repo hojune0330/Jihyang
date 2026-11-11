@@ -247,7 +247,11 @@ class GlassIconButton extends StatelessWidget {
     this.iconColor = GlassTokens.ink,
     this.onColor = false,
     this.material = GlassMaterial.regular,
+    this.shadow = true,
   });
+
+  /// 카드 안처럼 이미 유리 위에 놓일 때는 그림자를 끈다.
+  final bool shadow;
 
   final IconData icon;
   final VoidCallback? onPressed;
@@ -271,6 +275,8 @@ class GlassIconButton extends StatelessWidget {
           child: GlassSurface(
             material: material,
             onColor: onColor,
+            shadow: shadow,
+            blur: shadow,
             radius: GlassTokens.rPill,
             child: Center(
               child: Icon(icon, size: size * 0.46, color: iconColor),

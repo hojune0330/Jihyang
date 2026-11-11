@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/workout_record.dart';
 import '../services/workout_store.dart';
 import '../theme/app_theme.dart';
+import '../theme/glass/glass.dart';
 import '../utils/fmt.dart';
 
 /// 운동 기록 화면 — 애플워치 활동 기록처럼 월별 달력으로 보여준다.
@@ -67,41 +68,40 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   // ------------------------------------------------------------ 빌드
 
+  bool _scrolled = false;
+
   @override
   Widget build(BuildContext context) {
+    final top = MediaQuery.paddingOf(context).top;
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          color: AppColors.textPrimary,
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text(
-          '운동 기록',
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.2,
-          ),
-        ),
-      ),
-      body: SafeArea(
+      backgroundColor: GlassTokens.ambientTop,
+      extendBodyBehindAppBar: true,
+      appBar: GlassNavBar(title: '운동 기록', scrolled: _scrolled),
+      body: GlassBackdrop.ambient(
+        preset: BackdropPreset.history,
         child: _loading
             ? const Center(child: CircularProgressIndicator(strokeWidth: 2.2))
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-                children: [
-                  _monthSummary(),
-                  const SizedBox(height: 12),
-                  _calendarCard(),
-                  const SizedBox(height: 16),
-                  _dayDetail(),
-                ],
+            : NotificationListener<ScrollNotification>(
+                onNotification: (n) {
+                  final v = n.metrics.pixels > 4;
+                  if (v != _scrolled) setState(() => _scrolled = v);
+                  return false;
+                },
+                child: ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    top + 72,
+                    16,
+                    32 + MediaQuery.paddingOf(context).bottom,
+                  ),
+                  children: [
+                    _monthSummary(),
+                    const SizedBox(height: 12),
+                    _calendarCard(),
+                    const SizedBox(height: 18),
+                    _dayDetail(),
+                  ],
+                ),
               ),
       ),
     );
@@ -136,12 +136,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _stat(String label, String value, String unit) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-        ),
+      child: GlassSurface(
+        radius: GlassTokens.rMd,
+        padding: const EdgeInsets.fromLTRB(13, 12, 12, 13),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -149,7 +146,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               label,
               style: const TextStyle(
                 fontSize: 11,
-                color: AppColors.textTertiary,
+                color: GlassTokens.tert,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -165,7 +162,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
-                        color: AppColors.textPrimary,
+                        color: GlassTokens.ink,
                       ),
                     ),
                     if (unit.isNotEmpty)
@@ -174,7 +171,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textSecondary,
+                          color: GlassTokens.sub,
                         ),
                       ),
                   ],
@@ -193,19 +190,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final now = DateTime.now();
     final isCurrentMonth = _month.year == now.year && _month.month == now.month;
 
-    return Container(
+    return GlassSurface(
+      radius: GlassTokens.rLg,
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(22),
-      ),
       child: Column(
         children: [
           Row(
             children: [
-              IconButton(
+              GlassIconButton(
                 tooltip: '이전 달',
-                icon: const Icon(Icons.chevron_left_rounded, size: 26),
+                icon: Icons.chevron_left_rounded,
+                size: 40,
+                material: GlassMaterial.thick,
+                shadow: false,
                 onPressed: () => setState(() {
                   _month = DateTime(_month.year, _month.month - 1, 1);
                 }),
@@ -217,13 +214,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w900,
-                    color: AppColors.textPrimary,
+                    color: GlassTokens.ink,
                   ),
                 ),
               ),
-              IconButton(
+              GlassIconButton(
                 tooltip: '다음 달',
-                icon: const Icon(Icons.chevron_right_rounded, size: 26),
+                icon: Icons.chevron_right_rounded,
+                size: 40,
+                material: GlassMaterial.thick,
+                shadow: false,
                 onPressed: isCurrentMonth
                     ? null
                     : () => setState(() {
@@ -244,10 +244,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         fontSize: 11.5,
                         fontWeight: FontWeight.w800,
                         color: w == '일'
-                            ? AppColors.work
+                            ? GlassTokens.workText
                             : w == '토'
-                            ? AppColors.rest
-                            : AppColors.textTertiary,
+                            ? GlassTokens.restText
+                            : GlassTokens.tert,
                       ),
                     ),
                   ),
@@ -332,10 +332,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           ? FontWeight.w900
                           : FontWeight.w700,
                       color: isFuture
-                          ? AppColors.textTertiary.withValues(alpha: 0.5)
+                          ? GlassTokens.tert.withValues(alpha: 0.5)
                           : (selected && ring != null && done)
                           ? Colors.white
-                          : AppColors.textPrimary,
+                          : GlassTokens.ink,
                     ),
                   ),
                 ),
@@ -366,31 +366,27 @@ class _HistoryScreenState extends State<HistoryScreen> {
             style: const TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w900,
-              color: AppColors.textPrimary,
+              color: GlassTokens.ink,
             ),
           ),
         ),
         if (items.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 28),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: const Column(
+          const GlassSurface(
+            material: GlassMaterial.thin,
+            padding: EdgeInsets.symmetric(vertical: 28),
+            child: Column(
               children: [
                 Icon(
                   Icons.self_improvement_rounded,
                   size: 30,
-                  color: AppColors.textTertiary,
+                  color: GlassTokens.tert,
                 ),
-                SizedBox(height: 8),
+                SizedBox(height: 8, width: double.infinity),
                 Text(
                   '이 날은 운동 기록이 없습니다',
                   style: TextStyle(
                     fontSize: 13,
-                    color: AppColors.textSecondary,
+                    color: GlassTokens.sub,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -407,13 +403,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _recordCard(WorkoutRecord r) {
-    final accent = r.isCompleted ? AppColors.work : AppColors.textSecondary;
-    return Container(
+    final accent = r.isCompleted ? GlassTokens.workText : GlassTokens.sub;
+    return GlassSurface(
+      tint: r.isCompleted ? AppColors.work : null,
+      tintStrength: 0.5,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -441,7 +435,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 '${_time(r.startedAt)} – ${_time(r.endedAt)}',
                 style: const TextStyle(
                   fontSize: 11.5,
-                  color: AppColors.textTertiary,
+                  color: GlassTokens.tert,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -465,7 +459,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          const Divider(height: 1, color: AppColors.divider),
+          Divider(height: 1, color: GlassTokens.ink.withValues(alpha: 0.10)),
           const SizedBox(height: 10),
           _kv(
             '구성',
@@ -486,7 +480,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: LinearProgressIndicator(
         value: progress.clamp(0.0, 1.0),
         minHeight: 6,
-        backgroundColor: AppColors.surfaceHigh,
+        backgroundColor: GlassTokens.ink.withValues(alpha: 0.08),
         color: AppColors.work,
       ),
     );
@@ -500,7 +494,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           k,
           style: const TextStyle(
             fontSize: 11,
-            color: AppColors.textTertiary,
+            color: GlassTokens.tert,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -510,7 +504,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w900,
-            color: AppColors.textPrimary,
+            color: GlassTokens.ink,
             fontFeatures: [FontFeature.tabularFigures()],
           ),
         ),
@@ -525,10 +519,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         children: [
           Text(
             k,
-            style: const TextStyle(
-              fontSize: 12.5,
-              color: AppColors.textTertiary,
-            ),
+            style: const TextStyle(fontSize: 12.5, color: GlassTokens.tert),
           ),
           const Spacer(),
           Flexible(
@@ -538,7 +529,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                color: GlassTokens.ink,
                 fontFeatures: [FontFeature.tabularFigures()],
               ),
             ),
@@ -574,7 +565,7 @@ class _RingPainter extends CustomPainter {
     final track = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke
-      ..color = AppColors.surfaceHigh;
+      ..color = GlassTokens.ink.withValues(alpha: 0.08);
     canvas.drawCircle(center, radius, track);
 
     final p = progress;
@@ -609,7 +600,7 @@ class _RingPainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.4
-          ..color = AppColors.textPrimary.withValues(alpha: 0.7),
+          ..color = GlassTokens.ink.withValues(alpha: 0.7),
       );
     }
   }
