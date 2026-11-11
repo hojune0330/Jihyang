@@ -191,12 +191,12 @@ void main() {
     await _shot(tester, key, '3_history');
   });
 
-  for (final phase in ['work', 'rest']) {
+  for (final phase in ['prepare', 'work', 'rest']) {
     testWidgets('캡처: 진행 $phase', (tester) async {
       const key = ValueKey('shot');
       final engine = TabataEngine(config: cfg)..audioOutputEnabled = false;
       engine.start();
-      engine.skip(); // 준비 → 운동
+      if (phase != 'prepare') engine.skip(); // 준비 → 운동
       if (phase == 'rest') engine.skip(); // 운동 → 휴식
       engine.pause();
       await _pump(

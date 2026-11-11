@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/phase.dart';
 import '../services/tabata_engine.dart';
 import '../theme/app_theme.dart';
+import '../theme/glass/glass.dart';
 import '../widgets/huge_time_display.dart';
 import '../widgets/progress_ring.dart';
 
@@ -44,7 +45,7 @@ class RunningScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: bg,
-      body: Container(
+      body: GlassBackdrop.phase(
         color: bg,
         child: SafeArea(
           child: LayoutBuilder(
@@ -153,21 +154,16 @@ class RunningScreen extends StatelessWidget {
           ),
           if (paused) ...[
             const SizedBox(width: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-              decoration: BoxDecoration(
-                border: Border.all(color: fg, width: 2),
-                borderRadius: BorderRadius.circular(5),
+            GlassChip(
+              label: '일시정지',
+              icon: Icons.pause_rounded,
+              color: fg,
+              onColor: true,
+              darken: GlassTokens.needsDarkGlass(
+                AppColors.bgOf(phase?.type.name ?? 'prepare'),
               ),
-              child: Text(
-                '일시정지',
-                style: TextStyle(
-                  color: fg,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.2,
-                ),
-              ),
+              fontSize: 12,
+              dense: true,
             ),
           ],
         ],
@@ -241,36 +237,34 @@ class RunningScreen extends StatelessWidget {
       child: Column(
         children: [
           // ⑤ 다음 구간은 테두리 없는 작은 알약으로 현재 상태와 구분
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(
-              color: Color.alphaBlend(
-                fg.withValues(alpha: 0.14),
-                Colors.transparent,
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              nextText,
-              style: TextStyle(
-                color: fg.withValues(alpha: 0.92),
-                fontSize: 13.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+          GlassChip(
+            label: nextText,
+            color: fg,
+            onColor: true,
+            fontSize: 13.5,
+            darken: GlassTokens.needsDarkGlass(bg),
           ),
           SizedBox(height: compact ? 8 : 12),
           // 보조 선형 진행 바 — 전체 세션 진행률
           ClipRRect(
-            borderRadius: BorderRadius.circular(3),
+            borderRadius: BorderRadius.circular(4),
             child: SizedBox(
-              height: 5,
+              height: 7,
               child: Stack(
                 children: [
                   Container(color: AppColors.trackOn(bg)),
                   FractionallySizedBox(
                     widthFactor: progress.clamp(0.0, 1.0),
-                    child: Container(color: fg),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [fg, fg.withValues(alpha: 0.85)],
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -322,44 +316,20 @@ class RunningScreen extends StatelessWidget {
             onTap: onStop,
             tooltip: '운동 종료',
             size: side,
+            dark: GlassTokens.needsDarkGlass(bg),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: SizedBox(
+            child: GlassButton.filled(
+              label: paused ? '재개' : '일시정지',
+              icon: paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+              color: fg,
+              // 흰 버튼 위 글자는 상태색의 '진한 글자색' (옐로 위 대비 문제 해결)
+              foreground: GlassTokens.textOf(engine.phaseType),
               height: h,
-              child: FilledButton(
-                onPressed: onPauseToggle,
-                style: FilledButton.styleFrom(
-                  backgroundColor: fg,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                      size: compact ? 28 : 32,
-                      color: bg,
-                    ),
-                    const SizedBox(width: 7),
-                    Flexible(
-                      child: Text(
-                        paused ? '재개' : '일시정지',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: compact ? 18 : 20,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.3,
-                          color: bg,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              fontSize: compact ? 18 : 20,
+              radius: GlassTokens.rPill,
+              onPressed: onPauseToggle,
             ),
           ),
           const SizedBox(width: 12),
@@ -369,6 +339,7 @@ class RunningScreen extends StatelessWidget {
             onTap: onSkip,
             tooltip: '다음 구간으로',
             size: side,
+            dark: GlassTokens.needsDarkGlass(bg),
           ),
         ],
       ),
@@ -407,12 +378,12 @@ class _PhaseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(14, compact ? 7 : 9, 14, compact ? 9 : 11),
-      decoration: BoxDecoration(
-        color: AppColors.cardOn(bg),
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return GlassSurface(
+      material: GlassMaterial.thin,
+      onColor: true,
+      darken: GlassTokens.needsDarkGlass(bg),
+      radius: GlassTokens.rMd,
+      padding: EdgeInsets.fromLTRB(16, compact ? 8 : 10, 16, compact ? 10 : 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -467,7 +438,7 @@ class _PhaseCard extends StatelessWidget {
   }
 }
 
-/// 보조 버튼 — 어떤 배경색 위에서도 깔끔하게 보이도록 외곽선만 사용한다.
+/// 보조 버튼 — 상태색 위 원형 유리 버튼 (종료 / 다음 구간).
 class _SideButton extends StatelessWidget {
   const _SideButton({
     required this.icon,
@@ -475,8 +446,10 @@ class _SideButton extends StatelessWidget {
     required this.onTap,
     required this.tooltip,
     this.size = 58,
+    this.dark = false,
   });
 
+  final bool dark;
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
@@ -485,33 +458,15 @@ class _SideButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: onTap,
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: color.withValues(alpha: 0.85),
-                  width: 2,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                size: size * 0.45,
-                color: color.withValues(alpha: 0.9),
-              ),
-            ),
-          ),
-        ),
-      ),
+    return GlassIconButton(
+      icon: icon,
+      tooltip: tooltip,
+      onPressed: onTap,
+      size: size,
+      iconColor: color,
+      onColor: true,
+      darken: dark,
+      material: GlassMaterial.regular,
     );
   }
 }

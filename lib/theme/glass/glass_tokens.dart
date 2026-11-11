@@ -127,6 +127,9 @@ class GlassTokens {
   static const Color restText = Color(0xFF2F5DAA);
   static const Color prepText = Color(0xFF7A5C00);
 
+  /// 이 배경색 위 유리는 어둡게 눌러야 흰 글자가 읽히는가 (준비 옐로처럼 밝은 색)
+  static bool needsDarkGlass(Color bg) => bg.computeLuminance() > 0.5;
+
   /// 상태 이름 → 글자용 진한 색
   static Color textOf(String phaseType) => switch (phaseType) {
     'work' => workText,

@@ -248,7 +248,10 @@ class GlassIconButton extends StatelessWidget {
     this.onColor = false,
     this.material = GlassMaterial.regular,
     this.shadow = true,
+    this.darken = false,
   });
+
+  final bool darken;
 
   /// 카드 안처럼 이미 유리 위에 놓일 때는 그림자를 끈다.
   final bool shadow;
@@ -277,6 +280,7 @@ class GlassIconButton extends StatelessWidget {
             onColor: onColor,
             shadow: shadow,
             blur: shadow,
+            darken: darken,
             radius: GlassTokens.rPill,
             child: Center(
               child: Icon(icon, size: size * 0.46, color: iconColor),
@@ -299,7 +303,10 @@ class GlassChip extends StatelessWidget {
     this.onColor = false,
     this.fontSize = 12.5,
     this.dense = false,
+    this.darken = false,
   });
+
+  final bool darken;
 
   final String label;
   final IconData? icon;
@@ -314,6 +321,7 @@ class GlassChip extends StatelessWidget {
     final chip = GlassSurface(
       material: GlassMaterial.thin,
       onColor: onColor,
+      darken: darken,
       radius: GlassTokens.rPill,
       shadow: !onColor,
       padding: EdgeInsets.symmetric(

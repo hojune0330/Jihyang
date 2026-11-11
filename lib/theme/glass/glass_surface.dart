@@ -21,7 +21,12 @@ class GlassSurface extends StatelessWidget {
     this.onColor = false,
     this.shadow = true,
     this.blur = true,
+    this.darken = false,
   });
+
+  /// 밝은 상태색(준비 옐로) 위에서 흰 글자를 받치기 위해 면을 흰색 대신
+  /// 어두운 잉크로 채운다 (§4-4 대비 규칙, D6 캡처에서 확인).
+  final bool darken;
 
   final Widget child;
   final GlassMaterial material;
@@ -55,7 +60,9 @@ class GlassSurface extends StatelessWidget {
     final t = tint;
 
     Color face(double a) {
-      final base = Colors.white.withValues(alpha: a);
+      final base = darken
+          ? GlassTokens.shadowInk.withValues(alpha: a * 0.9)
+          : Colors.white.withValues(alpha: a);
       if (t == null) return base;
       return Color.alphaBlend(
         t.withValues(alpha: GlassTokens.tintAlpha * tintStrength),
@@ -63,7 +70,9 @@ class GlassSurface extends StatelessWidget {
       );
     }
 
-    final hl = onColor
+    final hl = darken
+        ? 0.10
+        : onColor
         ? GlassTokens.highlightAlphaOnColor
         : GlassTokens.highlightAlpha;
 
